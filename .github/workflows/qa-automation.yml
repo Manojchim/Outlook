@@ -1,12 +1,14 @@
 name: QA Automation
 
+# Actions target: Manojchim/Outlook only (main).
 # Maps SMTP / Zephyr credentials from GitHub Secrets and Variables.
 # Automatic email delivery stays DISABLED (QA_REPORT_AUTO_SEND=false).
+# Live Zephyr create/execute/send requires explicit workflow_dispatch inputs + operator approval.
 on:
   workflow_dispatch:
     inputs:
       report_data_source:
-        description: "Report data source: sample (fixture) or zephyr (live read-only API)"
+        description: "Report data source: sample (fixture) or zephyr (live read-only API). Live never falls back to sample."
         type: choice
         options:
           - sample
@@ -17,7 +19,7 @@ on:
         type: string
         default: SCRUM
       test_cycle_key:
-        description: "Required for zephyr source (e.g. SCRUM-R1). Ignored for sample."
+        description: "Required for zephyr source (e.g. SCRUM-R3). Ignored for sample. Do not reuse SCRUM-R1 without approval."
         type: string
         default: ""
       smtp_validate_only:
@@ -37,7 +39,7 @@ on:
         type: boolean
         default: false
       run_tests:
-        description: "Run Playwright e2e tests"
+        description: "Run Playwright e2e tests against local AUT http://127.0.0.1:4173"
         type: boolean
         default: false
   push:
@@ -57,11 +59,14 @@ env:
   QA_REPORT_AUTO_SEND: "false"
   QA_EMAIL_PROVIDER: smtp
   QA_REPORT_FORMATS: pdf,xlsx
+  AUT_BASE_URL: "http://127.0.0.1:4173"
+  EXPECTED_GITHUB_REPOSITORY: "Manojchim/Outlook"
 
 jobs:
   validate-smtp:
     name: Validate SMTP (no send by default)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: >
       github.event_name != 'workflow_dispatch' ||
       inputs.smtp_validate_only == true ||
@@ -70,6 +75,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Assert Outlook repository target
+        run: |
+          set -euo pipefail
+          echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_SHA=${GITHUB_SHA}"
+          echo "GITHUB_RUN_ID=${GITHUB_RUN_ID}"
+          if [ "${GITHUB_REPOSITORY}" != "Manojchim/Outlook" ]; then
+            echo "::error::QA Actions must run on Manojchim/Outlook. Got ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+          node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -154,9 +172,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Job summary
+        if: always()
+        env:
+          QA_REPORT_STATUS: ${{ job.status }}
+          QA_EMAIL_STATUS: not attempted (smtp validate job)
+        run: node scripts/write-qa-job-summary.js
+
   zephyr-report:
     name: QA report (sample or live Zephyr)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'workflow_dispatch'
     env:
       REPORT_DATA_SOURCE: ${{ inputs.report_data_source }}
@@ -176,6 +202,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Assert Outlook repository target
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY}" != "Manojchim/Outlook" ]; then
+            echo "::error::QA Actions must run on Manojchim/Outlook. Got ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+          node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -215,18 +250,28 @@ jobs:
           fi
 
       - name: Generate reports + consistency validation
+        id: reports
         run: |
           set -euo pipefail
           if [ "$REPORT_DATA_SOURCE" = "zephyr" ]; then
             node scripts/verify-report-consistency.js --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
+            echo "QA_REPORT_STATUS=validated_live" >> "$GITHUB_ENV"
           else
             node scripts/verify-report-consistency.js --source sample --story SCRUM-5
+            echo "QA_REPORT_STATUS=validated_sample" >> "$GITHUB_ENV"
           fi
           echo "Reports generated and validated. QA_REPORT_AUTO_SEND remains false."
           find reports/QA -type f -print || true
 
+      - name: Fail closed if report validation did not succeed
+        if: always() && steps.reports.outcome != 'success'
+        run: |
+          echo "::error::Report generation/validation failed. Job must not be treated as successful."
+          exit 1
+
       - name: Send LIVE report email (explicit send_email only)
-        if: ${{ inputs.send_email == true && inputs.report_data_source == 'zephyr' }}
+        id: email
+        if: ${{ inputs.send_email == true && inputs.report_data_source == 'zephyr' && steps.reports.outcome == 'success' }}
         run: |
           set -euo pipefail
           if [ -z "${TEST_EMAIL_RECIPIENT:-}" ]; then
@@ -234,6 +279,7 @@ jobs:
             exit 1
           fi
           node scripts/qa-report-send.js --send-validation --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
+          echo "QA_EMAIL_STATUS=smtp_accepted_or_attempted" >> "$GITHUB_ENV"
           echo "Live report email submission attempted. Check Actions log for SMTP acceptance."
 
       - name: Upload QA reports
@@ -245,9 +291,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Job summary
+        if: always()
+        env:
+          QA_REPORT_STATUS: ${{ env.QA_REPORT_STATUS || 'failed_or_skipped' }}
+          QA_EMAIL_STATUS: ${{ env.QA_EMAIL_STATUS || 'not attempted' }}
+        run: node scripts/write-qa-job-summary.js
+
   playwright-e2e:
     name: Playwright e2e
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: >
       github.event_name != 'workflow_dispatch' ||
       inputs.run_tests == true ||
@@ -262,9 +316,20 @@ jobs:
       QA_EMAIL_PROVIDER: smtp
       QA_REPORT_AUTO_SEND: "false"
       REPORT_DATA_SOURCE: sample
+      HOST: "127.0.0.1"
+      PORT: "4173"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Assert Outlook repository target
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY}" != "Manojchim/Outlook" ]; then
+            echo "::error::QA Actions must run on Manojchim/Outlook. Got ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+          node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -290,6 +355,7 @@ jobs:
             fi
           done
           echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
+          echo "AUT_BASE_URL=$AUT_BASE_URL"
 
       - name: Run Playwright tests
         id: tests
@@ -308,7 +374,44 @@ jobs:
           name: qa-reports-${{ github.run_id }}
           path: |
             reports/QA/**
+            reports/SCRUM-5-e2e/**
             test-results/**
             playwright-report/**
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Job summary
+        if: always()
+        env:
+          QA_REPORT_STATUS: ${{ steps.reports.outcome || 'n/a' }}
+          QA_EMAIL_STATUS: not attempted
+          REPORT_DATA_SOURCE: sample
+        run: node scripts/write-qa-job-summary.js
+
+  workflow-status:
+    name: Workflow status gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [validate-smtp, zephyr-report, playwright-e2e]
+    steps:
+      - name: Summarize job outcomes
+        run: |
+          set -euo pipefail
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch/ref: ${{ github.ref }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "validate-smtp: ${{ needs.validate-smtp.result }}"
+          echo "zephyr-report: ${{ needs.zephyr-report.result }}"
+          echo "playwright-e2e: ${{ needs.playwright-e2e.result }}"
+          failed=0
+          for result in "${{ needs.validate-smtp.result }}" "${{ needs.zephyr-report.result }}" "${{ needs.playwright-e2e.result }}"; do
+            if [ "$result" = "failure" ]; then
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more QA jobs failed. Overall workflow marked failed."
+            exit 1
+          fi
+          echo "No failed jobs (skipped/success only)."

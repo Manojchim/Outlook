@@ -9,6 +9,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createZephyrWriteClient } = require("./zephyr-write-client");
+const {
+  buildEvidenceRegister,
+  writeEvidenceRegisterJson
+} = require("../src/evidence/evidence-register");
 
 const ROOT = path.join("reports", "SCRUM-5-e2e");
 const ASSETS = path.join(ROOT, "zephyr-assets.json");
@@ -154,6 +158,19 @@ async function main() {
     });
   }
 
+  const allUploads = executions.flatMap((e) => e.attachmentUploads || []);
+  const evidenceRegister = buildEvidenceRegister({
+    storyKey: assets.storyKey || "SCRUM-5",
+    cycleKey,
+    evidenceDir: EVIDENCE,
+    uploadResults: allUploads,
+    executions
+  });
+  writeEvidenceRegisterJson(
+    evidenceRegister,
+    path.join(ROOT, "evidence-register.json")
+  );
+
   const summary = {
     cycleKey,
     cycleId: assets.cycle.id,
@@ -161,10 +178,16 @@ async function main() {
     passed: executions.filter((e) => e.statusName === "Pass").length,
     failed: executions.filter((e) => e.statusName === "Fail").length,
     executions,
+    evidenceRegister: {
+      totalScreenshots: evidenceRegister.totalScreenshots,
+      uploadedToZephyrCount: evidenceRegister.uploadedToZephyrCount,
+      failedUploadCount: evidenceRegister.failedUploadCount,
+      missingEvidenceForExecutions: evidenceRegister.missingEvidenceForExecutions
+    },
     attachmentApiLimitation: executions.every(
       (e) => !(e.attachmentUploads || []).some((u) => u.ok)
     )
-      ? "Zephyr Scale Cloud API did not accept execution attachment uploads; local evidence retained and referenced in comments."
+      ? "Zephyr Scale Cloud API did not accept execution attachment uploads; local evidence retained and referenced in comments. claimedAttachedToZephyr=false unless upload ok:true."
       : null
   };
 
