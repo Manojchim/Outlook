@@ -5,7 +5,10 @@ const { ZephyrHttpClient } = require("./zephyr-http-client");
 const { ZephyrReportError } = require("./zephyr-errors");
 const {
   mapExecutionRecord,
-  buildReportDataFromZephyr
+  buildReportDataFromZephyr,
+  extractTestCaseKey,
+  createStatusLookupCache,
+  resolveExecutionStatus
 } = require("./zephyr-execution-mapper");
 
 function assertCycleKey(projectKey, cycleKey) {
@@ -47,6 +50,9 @@ async function loadZephyrReportData({
   const cycleKey = assertCycleKey(resolvedProject, testCycleKey);
 
   const http = client || new ZephyrHttpClient({ config });
+  const statusCache = createStatusLookupCache();
+  const fetchStatusById = (id) =>
+    http.get(`/statuses/${encodeURIComponent(String(id))}`);
 
   let cycle;
   try {
@@ -86,7 +92,6 @@ async function loadZephyrReportData({
     let fullExecution = raw;
     let links = [];
 
-    const caseKey = raw?.testCase?.key;
     const execId = raw?.key || raw?.id;
 
     if (fetchExecutionDetails && execId) {
@@ -98,6 +103,9 @@ async function loadZephyrReportData({
         fullExecution = raw;
       }
     }
+
+    const caseKey =
+      extractTestCaseKey(fullExecution) || extractTestCaseKey(raw);
 
     if (fetchTestCaseDetails && caseKey) {
       try {
@@ -120,10 +128,16 @@ async function loadZephyrReportData({
       }
     }
 
+    const resolvedStatus = await resolveExecutionStatus(fullExecution || raw, {
+      fetchStatusById,
+      cache: statusCache
+    });
+
     mapped.push(
       mapExecutionRecord(fullExecution || raw, {
         testCaseDetails: details,
-        links
+        links,
+        resolvedStatus
       })
     );
   }
@@ -136,6 +150,10 @@ async function loadZephyrReportData({
   });
 
   report.zephyrConfigSummary = summarizeZephyrConfig(config);
+  report.metadata = {
+    ...(report.metadata || {}),
+    statusLookupCacheSize: statusCache.size
+  };
   return report;
 }
 

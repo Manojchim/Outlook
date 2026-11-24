@@ -19,7 +19,12 @@ const {
 const {
   mapExecutionRecord,
   dedupeExecutions,
-  buildReportDataFromZephyr
+  buildReportDataFromZephyr,
+  extractTestCaseKeyFromSelfUrl,
+  extractTestCaseKey,
+  extractStatusPayload,
+  createStatusLookupCache,
+  resolveExecutionStatus
 } = require("../src/zephyr/zephyr-execution-mapper");
 const { loadZephyrReportData } = require("../src/zephyr/zephyr-report-loader");
 const {
@@ -429,6 +434,251 @@ test("PDF/Excel generate from live-shaped data and stay consistent", async () =>
   assert.ok(fs.existsSync(generated.files.xlsx));
   assert.match(path.basename(generated.files.pdf), /LIVE/);
   assert.equal(generated.data.reportingSourceLabel, "LIVE ZEPHYR DATA");
+});
+
+test("status with embedded name maps without lookup", async () => {
+  const cache = createStatusLookupCache();
+  let lookups = 0;
+  const resolved = await resolveExecutionStatus(
+    { status: { id: 1, name: "Pass" } },
+    {
+      cache,
+      fetchStatusById: async () => {
+        lookups += 1;
+        return { id: 1, name: "Pass" };
+      }
+    }
+  );
+  assert.equal(resolved.name, "Pass");
+  assert.equal(resolved.lookupPerformed, false);
+  assert.equal(lookups, 0);
+  const mapped = mapExecutionRecord(
+    { key: "SCRUM-E1", testCase: { key: "SCRUM-T1" }, status: { name: "Pass" } },
+    { resolvedStatus: resolved }
+  );
+  assert.equal(mapped.normalizedStatus, "PASS");
+  assert.equal(mapped.statusName, "Pass");
+  assert.equal(mapped.statusId, 1);
+});
+
+test("status id-only payload resolves through statuses API", async () => {
+  const cache = createStatusLookupCache();
+  let lookups = 0;
+  const raw = {
+    key: "SCRUM-E1",
+    testExecutionStatus: {
+      id: 826127,
+      self: "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826127"
+    }
+  };
+  const resolved = await resolveExecutionStatus(raw, {
+    cache,
+    fetchStatusById: async (id) => {
+      lookups += 1;
+      assert.equal(Number(id), 826127);
+      return { id: 826127, name: "Pass" };
+    }
+  });
+  assert.equal(lookups, 1);
+  assert.equal(resolved.name, "Pass");
+  assert.equal(resolved.lookupOk, true);
+  const mapped = mapExecutionRecord(raw, { resolvedStatus: resolved });
+  assert.equal(mapped.normalizedStatus, "PASS");
+  assert.equal(mapped.statusId, 826127);
+  assert.equal(mapped.statusName, "Pass");
+  assert.equal(mapped.originalStatus, "Pass");
+});
+
+test("shared status id is looked up only once per reporting run", async () => {
+  const cache = createStatusLookupCache();
+  let lookups = 0;
+  const fetchStatusById = async (id) => {
+    lookups += 1;
+    return { id: Number(id), name: "Pass" };
+  };
+  for (let i = 0; i < 5; i += 1) {
+    await resolveExecutionStatus(
+      {
+        key: `SCRUM-E${i}`,
+        testExecutionStatus: { id: 826127, self: "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826127" }
+      },
+      { cache, fetchStatusById }
+    );
+  }
+  assert.equal(lookups, 1);
+  assert.equal(cache.size, 1);
+});
+
+test("unknown status id and failed lookup map to UNKNOWN never PASS", async () => {
+  const unknownName = await resolveExecutionStatus(
+    { testExecutionStatus: { id: 999, name: "Quarantined" } },
+    { cache: createStatusLookupCache(), fetchStatusById: async () => ({ id: 999, name: "Quarantined" }) }
+  );
+  const mappedUnknown = mapExecutionRecord(
+    { key: "SCRUM-E9", testCase: { key: "SCRUM-T9" } },
+    { resolvedStatus: unknownName }
+  );
+  assert.equal(mappedUnknown.normalizedStatus, "UNKNOWN");
+  assert.notEqual(mappedUnknown.normalizedStatus, "PASS");
+
+  const failed = await resolveExecutionStatus(
+    { testExecutionStatus: { id: 777, self: "https://eu.api.zephyrscale.smartbear.com/v2/statuses/777" } },
+    {
+      cache: createStatusLookupCache(),
+      fetchStatusById: async () => {
+        throw new Error("upstream boom");
+      }
+    }
+  );
+  assert.equal(failed.name, null);
+  assert.equal(failed.lookupOk, false);
+  const mappedFailed = mapExecutionRecord(
+    { key: "SCRUM-E8", testCase: { key: "SCRUM-T8" } },
+    { resolvedStatus: failed }
+  );
+  assert.equal(mappedFailed.normalizedStatus, "UNKNOWN");
+  assert.equal(mappedFailed.statusId, 777);
+  assert.equal(mappedFailed.statusName, null);
+  assert.equal(mappedFailed.originalStatus, "status:777");
+  assert.notEqual(mappedFailed.normalizedStatus, "PASS");
+  assert.notEqual(mappedFailed.normalizedStatus, "NOT_EXECUTED");
+});
+
+test("test case key extraction from testCase.self and details lookup", () => {
+  assert.equal(
+    extractTestCaseKeyFromSelfUrl(
+      "https://eu.api.zephyrscale.smartbear.com/v2/testcases/SCRUM-T28/versions/1"
+    ),
+    "SCRUM-T28"
+  );
+  assert.equal(extractTestCaseKeyFromSelfUrl("not a url"), null);
+  assert.equal(extractTestCaseKeyFromSelfUrl(""), null);
+  assert.equal(extractTestCaseKeyFromSelfUrl(null), null);
+  assert.equal(
+    extractTestCaseKey({
+      testCase: {
+        self: "https://eu.api.zephyrscale.smartbear.com/v2/testcases/SCRUM-T29/versions/1",
+        id: 8821945
+      }
+    }),
+    "SCRUM-T29"
+  );
+  assert.equal(
+    extractTestCaseKey({ testCase: { key: "SCRUM-T1" } }),
+    "SCRUM-T1"
+  );
+});
+
+test("EU live-shaped loader resolves Pass + test case names with one status lookup", async () => {
+  const statusPaths = [];
+  const casePaths = [];
+  const executions = [];
+  for (let i = 1; i <= 26; i += 1) {
+    const caseKey = `SCRUM-T${27 + i}`;
+    executions.push({
+      id: 1000 + i,
+      key: `SCRUM-E${i}`,
+      project: { id: 1, key: "SCRUM" },
+      testCase: {
+        self: `https://eu.api.zephyrscale.smartbear.com/v2/testcases/${caseKey}/versions/1`,
+        id: 8800000 + i
+      },
+      testExecutionStatus: {
+        id: 826127,
+        self: "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826127"
+      },
+      actualEndDate: "2026-11-22T11:29:54Z",
+      executionTime: 0,
+      comment: `Actual: case ${i}`,
+      testCycle: { id: 2331231, key: "SCRUM-R1" }
+    });
+  }
+
+  const client = new ZephyrHttpClient({
+    config: {
+      token: "token-abc",
+      baseUrlRaw: "https://eu.api.zephyrscale.smartbear.com/v2",
+      projectKey: "SCRUM",
+      timeoutMs: 50,
+      retries: 0
+    },
+    fetchImpl: async (url) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/testcycles/SCRUM-R1")) {
+        return jsonResponse({
+          id: 2331231,
+          key: "SCRUM-R1",
+          name: "SCRUM-5 QA Cycle 2026-11-22"
+        });
+      }
+      if (u.pathname.endsWith("/testexecutions") && !/SCRUM-E\d+$/.test(u.pathname)) {
+        return jsonResponse(page(executions, { isLast: true, total: 26 }));
+      }
+      const execMatch = u.pathname.match(/\/testexecutions\/(SCRUM-E\d+)$/);
+      if (execMatch) {
+        const found = executions.find((e) => e.key === execMatch[1]);
+        return jsonResponse(found);
+      }
+      if (u.pathname.endsWith("/links")) {
+        return jsonResponse({ issues: [] });
+      }
+      if (u.pathname.endsWith("/statuses/826127")) {
+        statusPaths.push(u.pathname);
+        return jsonResponse({ id: 826127, name: "Pass" });
+      }
+      const caseMatch = u.pathname.match(/\/testcases\/(SCRUM-T\d+)$/);
+      if (caseMatch) {
+        casePaths.push(caseMatch[1]);
+        return jsonResponse({
+          key: caseMatch[1],
+          name: `Case name for ${caseMatch[1]}`
+        });
+      }
+      return jsonResponse({ message: "not found" }, 404);
+    },
+    logger: QUIET
+  });
+
+  const data = await loadZephyrReportData({
+    projectKey: "SCRUM",
+    testCycleKey: "SCRUM-R1",
+    client,
+    env: {
+      ZEPHYR_SCALE_API_TOKEN: "token-abc",
+      ZEPHYR_SCALE_API_BASE_URL: "https://eu.api.zephyrscale.smartbear.com/v2"
+    }
+  });
+
+  assert.equal(data.testCases.length, 26);
+  assert.equal(data.metrics.totalTestCases, 26);
+  assert.equal(data.metrics.passed, 26);
+  assert.equal(data.metrics.failed, 0);
+  assert.equal(data.metrics.blocked, 0);
+  assert.equal(data.metrics.notExecuted, 0);
+  assert.equal(data.metrics.inProgress, 0);
+  assert.equal(data.metrics.skipped, 0);
+  assert.equal(data.metrics.unknown, 0);
+  assert.equal(statusPaths.length, 1);
+  assert.equal(data.metadata.statusLookupCacheSize, 1);
+  assert.ok(data.testCases.every((tc) => tc.key && /^SCRUM-T\d+$/.test(tc.key)));
+  assert.ok(data.testCases.every((tc) => tc.name && tc.name.startsWith("Case name for ")));
+  assert.ok(data.testCases.every((tc) => tc.status === "PASS"));
+  assert.ok(data.testCases.every((tc) => tc.statusName === "Pass"));
+  assert.ok(data.testCases.every((tc) => tc.statusId === 826127));
+  assert.equal(casePaths.length, 26);
+  assert.equal(data.reportingSourceLabel, "LIVE ZEPHYR DATA");
+});
+
+test("extractStatusPayload prefers testExecutionStatus EU field", () => {
+  const payload = extractStatusPayload({
+    status: { name: "Fail" },
+    testExecutionStatus: {
+      id: 826127,
+      self: "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826127"
+    }
+  });
+  assert.equal(payload.id, 826127);
+  assert.equal(payload.name, null);
 });
 
 test("auto-send remains false by default", () => {

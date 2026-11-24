@@ -12,6 +12,180 @@ function asNullableString(value) {
   return text ? text : null;
 }
 
+/**
+ * Extract a Zephyr test case key from a self URL such as:
+ *   https://eu.api.zephyrscale.smartbear.com/v2/testcases/SCRUM-T28/versions/1
+ * Returns null for missing/malformed URLs. Never invents keys.
+ */
+function extractTestCaseKeyFromSelfUrl(selfUrl) {
+  const text = asNullableString(selfUrl);
+  if (!text) return null;
+  try {
+    const pathname = text.includes("://") ? new URL(text).pathname : text;
+    const match = String(pathname).match(/\/testcases\/([^/?#]+)/i);
+    if (!match) return null;
+    const key = decodeURIComponent(match[1]).trim();
+    if (!key || /^versions$/i.test(key)) return null;
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+function extractTestCaseKey(raw, testCaseDetails = null) {
+  return (
+    asNullableString(raw?.testCase?.key) ||
+    asNullableString(raw?.testCaseKey) ||
+    extractTestCaseKeyFromSelfUrl(raw?.testCase?.self) ||
+    asNullableString(testCaseDetails?.key) ||
+    null
+  );
+}
+
+/**
+ * Pull the best available status payload from an EU/US Zephyr execution record.
+ * Prefers testExecutionStatus (EU live shape) then legacy status/statusName fields.
+ */
+function extractStatusPayload(raw) {
+  const candidates = [
+    raw?.testExecutionStatus,
+    raw?.status,
+    raw?.executionStatus,
+    raw?.statusName
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === "") continue;
+
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return { id: candidate, name: null, self: null };
+    }
+
+    if (typeof candidate === "string") {
+      const text = candidate.trim();
+      if (!text) continue;
+      if (/^\d+$/.test(text)) {
+        return { id: Number(text), name: null, self: null };
+      }
+      return { id: null, name: text, self: null };
+    }
+
+    if (typeof candidate === "object") {
+      const id =
+        candidate.id != null && candidate.id !== ""
+          ? Number.isFinite(Number(candidate.id))
+            ? Number(candidate.id)
+            : candidate.id
+          : null;
+      const name = asNullableString(candidate.name);
+      const self = asNullableString(candidate.self);
+      if (id == null && !name && !self) continue;
+      return { id, name, self };
+    }
+  }
+
+  return null;
+}
+
+function createStatusLookupCache() {
+  return new Map();
+}
+
+function statusInfoFromResolved(resolved) {
+  if (!resolved || (resolved.name == null && resolved.id == null)) {
+    const empty = normalizeZephyrStatus(null);
+    return {
+      ...empty,
+      statusId: null,
+      statusName: null
+    };
+  }
+
+  if (resolved.name) {
+    const info = normalizeZephyrStatus(resolved.name);
+    return {
+      ...info,
+      statusId: resolved.id != null ? resolved.id : null,
+      statusName: resolved.name
+    };
+  }
+
+  // ID present but name unresolved / unknown — never treat as PASS or NOT_EXECUTED.
+  return {
+    originalStatus:
+      resolved.id != null ? `status:${resolved.id}` : null,
+    normalizedStatus: "UNKNOWN",
+    known: false,
+    statusId: resolved.id != null ? resolved.id : null,
+    statusName: null
+  };
+}
+
+/**
+ * Resolve an execution status name, caching by status ID for the reporting run.
+ * fetchStatusById should perform a read-only GET /statuses/{id}.
+ */
+async function resolveExecutionStatus(
+  raw,
+  { fetchStatusById, cache = createStatusLookupCache() } = {}
+) {
+  const payload = extractStatusPayload(raw);
+  if (!payload) {
+    return { id: null, name: null, lookupPerformed: false, lookupOk: false };
+  }
+
+  if (payload.name) {
+    return {
+      id: payload.id,
+      name: payload.name,
+      lookupPerformed: false,
+      lookupOk: true
+    };
+  }
+
+  if (payload.id == null) {
+    return { id: null, name: null, lookupPerformed: false, lookupOk: false };
+  }
+
+  const cacheKey = String(payload.id);
+  if (cache.has(cacheKey)) {
+    return { ...cache.get(cacheKey), lookupPerformed: false };
+  }
+
+  if (typeof fetchStatusById !== "function") {
+    const failed = {
+      id: payload.id,
+      name: null,
+      lookupPerformed: false,
+      lookupOk: false
+    };
+    cache.set(cacheKey, failed);
+    return failed;
+  }
+
+  try {
+    const remote = await fetchStatusById(payload.id);
+    const name = asNullableString(remote?.name);
+    const entry = {
+      id: payload.id,
+      name,
+      lookupPerformed: true,
+      lookupOk: Boolean(name)
+    };
+    cache.set(cacheKey, entry);
+    return entry;
+  } catch {
+    const failed = {
+      id: payload.id,
+      name: null,
+      lookupPerformed: true,
+      lookupOk: false
+    };
+    cache.set(cacheKey, failed);
+    return failed;
+  }
+}
+
 function pickLatestExecution(executions) {
   return executions.slice().sort((a, b) => {
     const aTime = Date.parse(a.actualEndDate || a.executionDate || "") || 0;
@@ -45,12 +219,23 @@ function dedupeExecutions(mappedExecutions) {
   return [...byCase.values(), ...orphans];
 }
 
-function mapExecutionRecord(raw, { testCaseDetails = null, links = [] } = {}) {
-  const statusInfo = normalizeZephyrStatus(raw?.status?.name || raw?.statusName || raw?.status);
-  const testCaseKey =
-    asNullableString(raw?.testCase?.key) ||
-    asNullableString(raw?.testCaseKey) ||
-    asNullableString(testCaseDetails?.key);
+function mapExecutionRecord(
+  raw,
+  { testCaseDetails = null, links = [], resolvedStatus = null } = {}
+) {
+  const statusInfo = resolvedStatus
+    ? statusInfoFromResolved(resolvedStatus)
+    : statusInfoFromResolved(
+        (() => {
+          const payload = extractStatusPayload(raw);
+          if (!payload) return null;
+          if (payload.name) return { id: payload.id, name: payload.name };
+          // Sync path with ID-only payload: UNKNOWN until async resolver runs.
+          if (payload.id != null) return { id: payload.id, name: null };
+          return null;
+        })()
+      );
+  const testCaseKey = extractTestCaseKey(raw, testCaseDetails);
   const testCaseName =
     asNullableString(testCaseDetails?.name) ||
     asNullableString(raw?.testCase?.name) ||
@@ -94,6 +279,8 @@ function mapExecutionRecord(raw, { testCaseDetails = null, links = [] } = {}) {
     status: statusInfo.normalizedStatus,
     normalizedStatus: statusInfo.normalizedStatus,
     originalStatus: statusInfo.originalStatus,
+    statusId: statusInfo.statusId,
+    statusName: statusInfo.statusName,
     knownStatus: statusInfo.known,
     executedBy:
       asNullableString(raw?.executedById) ||
@@ -228,6 +415,8 @@ function buildReportDataFromZephyr({
       actualResult: e.actualResult,
       status: e.normalizedStatus,
       originalStatus: e.originalStatus,
+      statusId: e.statusId,
+      statusName: e.statusName,
       executionId: e.testExecutionId,
       executedBy: e.executedBy,
       executionDate: e.executionDate,
@@ -259,5 +448,11 @@ module.exports = {
   mapExecutionRecord,
   dedupeExecutions,
   pickLatestExecution,
-  buildReportDataFromZephyr
+  buildReportDataFromZephyr,
+  extractTestCaseKeyFromSelfUrl,
+  extractTestCaseKey,
+  extractStatusPayload,
+  createStatusLookupCache,
+  resolveExecutionStatus,
+  statusInfoFromResolved
 };
