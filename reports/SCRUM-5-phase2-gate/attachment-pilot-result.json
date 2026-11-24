@@ -1,0 +1,50 @@
+{
+  "phase2Gate": "PASSED",
+  "caseKey": "SCRUM-T65",
+  "folderId": 1209778,
+  "endpointPattern": "PUT /testcases/{testCaseKey}/attachments/{fileName}",
+  "listEndpoint": "GET /testcases/{testCaseKey}/attachments",
+  "downloadEndpoint": "GET /testcases/{testCaseKey}/attachments/{attachmentId}",
+  "fileName": "SCRUM-5_SCRUM-T65_CapabilityProbe.png",
+  "attachmentId": 5024895,
+  "associatedWithCase": true,
+  "putStatus": 200,
+  "listStatus": 200,
+  "downloadVerified": true,
+  "localFile": "reports\\SCRUM-5-phase2-gate\\SCRUM-5_SCRUM-T65_CapabilityProbe.png",
+  "steps": [
+    {
+      "step": "PUT",
+      "method": "PUT",
+      "path": "/testcases/SCRUM-T65/attachments/SCRUM-5_SCRUM-T65_CapabilityProbe.png",
+      "status": 200,
+      "ok": true,
+      "body": null
+    },
+    {
+      "step": "GET_LIST",
+      "method": "GET",
+      "path": "/testcases/SCRUM-T65/attachments",
+      "status": 200,
+      "ok": true,
+      "body": {
+        "attachments": [
+          {
+            "id": 5024895,
+            "name": "SCRUM-5_SCRUM-T65_CapabilityProbe.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": "GET_DOWNLOAD",
+      "path": "/testcases/SCRUM-T65/attachments/5024895",
+      "status": 200,
+      "contentType": "image/png",
+      "bytes": 70,
+      "isPng": true,
+      "matchesLocalExactBytes": true,
+      "ok": true
+    }
+  ]
+}

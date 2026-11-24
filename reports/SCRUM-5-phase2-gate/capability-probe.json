@@ -1,0 +1,33 @@
+{
+  "phase": "folder-probe-case",
+  "folder": {
+    "id": 1209778,
+    "name": "SCRUM-5",
+    "created": true,
+    "self": null
+  },
+  "probeCase": {
+    "key": "SCRUM-T65",
+    "id": 8837184,
+    "self": "https://eu.api.zephyrscale.smartbear.com/v2/testcases/SCRUM-T65",
+    "name": "SCRUM-5 API attachment capability probe (NOT an E2E case)",
+    "owner": {
+      "accountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "self": "https://chimeratechnologies-team-j7fyto3u.atlassian.net/rest/api/2/user?accountId=712020%3A6e2b5d5b-03ce-4c95-bf5e-0790a239be89"
+    },
+    "status": {
+      "id": 826138,
+      "self": "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826138"
+    },
+    "folder": {
+      "id": 1209778,
+      "self": "https://eu.api.zephyrscale.smartbear.com/v2/folders/1209778"
+    },
+    "labels": [
+      "qa-capability-probe",
+      "scrum-5-phase2-gate"
+    ]
+  },
+  "manojAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+  "note": "This is the single Phase-2 capability probe case. Not part of the five E2E cases."
+}

@@ -2,19 +2,25 @@
 "use strict";
 
 /**
- * Create Zephyr executions for SCRUM-R3 from Playwright JSON results + evidence.
- * Attempts attachment upload; records limitation if Cloud API rejects it.
+ * Post Playwright results for SCRUM-5 Final E2E:
+ * - Create executions in the Final cycle
+ * - Upload+verify evidence to each TEST CASE (mandatory)
+ * - Upload+verify evidence to each EXECUTION
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { createZephyrWriteClient } = require("./zephyr-write-client");
 const {
+  uploadAndVerifyTestCaseAttachment,
+  uploadAndVerifyExecutionAttachment
+} = require("../src/zephyr/zephyr-attachment-upload");
+const {
   buildEvidenceRegister,
   writeEvidenceRegisterJson
 } = require("../src/evidence/evidence-register");
 
-const ROOT = path.join("reports", "SCRUM-5-e2e");
+const ROOT = path.join("reports", "SCRUM-5-e2e-final");
 const ASSETS = path.join(ROOT, "zephyr-assets.json");
 const RESULTS = path.join(ROOT, "playwright-results.json");
 const EVIDENCE = path.join(ROOT, "evidence");
@@ -31,41 +37,18 @@ function evidenceForKey(key) {
     .map((f) => path.join(EVIDENCE, f));
 }
 
-async function tryUploadAttachment(client, executionKey, filePath) {
-  try {
-    const form = new FormData();
-    const buf = fs.readFileSync(filePath);
-    const blob = new Blob([buf], { type: "image/png" });
-    form.append("file", blob, path.basename(filePath));
-    await client.postForm(
-      `/testexecutions/${encodeURIComponent(executionKey)}/attachments`,
-      form
-    );
-    return { ok: true, file: path.basename(filePath) };
-  } catch (err) {
-    return {
-      ok: false,
-      file: path.basename(filePath),
-      status: err.status || null,
-      message: String(err.message || err),
-      body: err.body || null
-    };
-  }
-}
-
 async function main() {
   const assets = JSON.parse(fs.readFileSync(ASSETS, "utf8"));
   const pw = JSON.parse(fs.readFileSync(RESULTS, "utf8"));
   const client = createZephyrWriteClient(process.env);
   const cycleKey = assets.cycle.key;
 
-  const suites = pw.suites || [];
   const specs = [];
   function walk(suite) {
     for (const s of suite.suites || []) walk(s);
     for (const spec of suite.specs || []) specs.push(spec);
   }
-  for (const s of suites) walk(s);
+  for (const s of pw.suites || []) walk(s);
 
   const byKey = new Map();
   for (const spec of specs) {
@@ -74,17 +57,18 @@ async function main() {
     const key = match ? match[1] : null;
     if (!key) continue;
     const result = (spec.tests || [])[0]?.results?.[0] || {};
-    const status = result.status; // passed|failed|timedOut|skipped
     byKey.set(key, {
       title,
-      ok: status === "passed",
-      status,
+      ok: result.status === "passed",
+      status: result.status,
       durationMs: result.duration || 0,
       error: result.error?.message || null
     });
   }
 
   const executions = [];
+  const uploadResults = [];
+
   for (const tc of assets.testCases) {
     const run = byKey.get(tc.key);
     if (!run) {
@@ -97,12 +81,12 @@ async function main() {
     }
     const files = evidenceForKey(tc.key);
     const comment = [
-      `Playwright automated execution for ${tc.key}.`,
+      `Playwright Final E2E for ${tc.key}.`,
       `Result: ${run.status}.`,
       `DurationMs: ${run.durationMs}.`,
       files.length
-        ? `Local evidence files: ${files.map((f) => path.basename(f)).join(", ")}`
-        : "No local screenshots found.",
+        ? `Local evidence: ${files.map((f) => path.basename(f)).join(", ")}`
+        : "No local screenshots.",
       run.error ? `Failure: ${String(run.error).slice(0, 500)}` : null
     ]
       .filter(Boolean)
@@ -118,13 +102,10 @@ async function main() {
       actualEndDate: new Date().toISOString()
     });
 
-    const executionKey =
+    let resolvedKey =
       created.key ||
       (created.id != null ? String(created.id) : null) ||
       null;
-
-    // Resolve key if API returns only id/self
-    let resolvedKey = executionKey;
     if (!resolvedKey || /^\d+$/.test(String(resolvedKey))) {
       const list = await client.get("/testexecutions", {
         projectKey: "SCRUM",
@@ -139,11 +120,35 @@ async function main() {
       resolvedKey = hit?.key || resolvedKey;
     }
 
-    const uploads = [];
+    const tcUploads = [];
+    const execUploads = [];
     for (const file of files) {
-      uploads.push(await tryUploadAttachment(client, resolvedKey, file));
+      const tcResult = await uploadAndVerifyTestCaseAttachment(
+        client,
+        tc.key,
+        file
+      );
+      tcUploads.push(tcResult);
+      uploadResults.push({
+        ...tcResult,
+        file: path.basename(file),
+        attachmentTarget: "TestCase"
+      });
+
+      const exResult = await uploadAndVerifyExecutionAttachment(
+        client,
+        resolvedKey,
+        file
+      );
+      execUploads.push(exResult);
+      uploadResults.push({
+        ...exResult,
+        file: path.basename(file),
+        attachmentTarget: "Execution"
+      });
     }
 
+    const tcVerified = tcUploads.filter((u) => u.ok && u.downloadVerified);
     executions.push({
       testCaseKey: tc.key,
       testCaseName: tc.name,
@@ -153,17 +158,36 @@ async function main() {
       playwrightStatus: run.status,
       durationMs: run.durationMs,
       evidenceFiles: files.map((f) => path.basename(f)),
-      attachmentUploads: uploads,
-      zephyrAttachmentSupported: uploads.some((u) => u.ok)
+      testCaseAttachments: tcUploads,
+      executionAttachments: execUploads,
+      testCaseEvidenceComplete: tcVerified.length > 0,
+      zephyrAttachmentSupported: [...tcUploads, ...execUploads].some((u) => u.ok)
     });
   }
 
-  const allUploads = executions.flatMap((e) => e.attachmentUploads || []);
+  const incomplete = executions.filter(
+    (e) => e.testCaseKey && !e.testCaseEvidenceComplete
+  );
+  if (incomplete.length) {
+    const fail = {
+      status: "EVIDENCE_INCOMPLETE",
+      message:
+        "One or more E2E cases lack verified test-case-level evidence attachments",
+      incomplete: incomplete.map((e) => e.testCaseKey)
+    };
+    fs.writeFileSync(
+      path.join(ROOT, "zephyr-executions.json"),
+      JSON.stringify({ ...fail, executions }, null, 2)
+    );
+    console.error(JSON.stringify(fail, null, 2));
+    process.exit(2);
+  }
+
   const evidenceRegister = buildEvidenceRegister({
     storyKey: assets.storyKey || "SCRUM-5",
     cycleKey,
     evidenceDir: EVIDENCE,
-    uploadResults: allUploads,
+    uploadResults,
     executions
   });
   writeEvidenceRegisterJson(
@@ -172,6 +196,7 @@ async function main() {
   );
 
   const summary = {
+    status: "SUCCESS",
     cycleKey,
     cycleId: assets.cycle.id,
     executionCount: executions.length,
@@ -182,13 +207,9 @@ async function main() {
       totalScreenshots: evidenceRegister.totalScreenshots,
       uploadedToZephyrCount: evidenceRegister.uploadedToZephyrCount,
       failedUploadCount: evidenceRegister.failedUploadCount,
-      missingEvidenceForExecutions: evidenceRegister.missingEvidenceForExecutions
-    },
-    attachmentApiLimitation: executions.every(
-      (e) => !(e.attachmentUploads || []).some((u) => u.ok)
-    )
-      ? "Zephyr Scale Cloud API did not accept execution attachment uploads; local evidence retained and referenced in comments. claimedAttachedToZephyr=false unless upload ok:true."
-      : null
+      testCaseVerifiedCount: evidenceRegister.testCaseVerifiedCount,
+      executionVerifiedCount: evidenceRegister.executionVerifiedCount
+    }
   };
 
   fs.writeFileSync(

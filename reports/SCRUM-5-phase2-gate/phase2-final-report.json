@@ -1,0 +1,78 @@
+{
+  "status": "PHASE2_GATE_COMPLETE_STOP",
+  "option": 3,
+  "stopped": true,
+  "didNotCreate": [
+    "five E2E test cases",
+    "execution cycle",
+    "Playwright run",
+    "GitHub Actions dispatch",
+    "email",
+    "commit/push"
+  ],
+  "preflight": {
+    "branch": "chore/outlook-qa-hardening",
+    "outlookRemote": "Manojchim/Outlook",
+    "appPath": "C:\\\\Users\\\\RManojKhanna\\\\Vsc\\\\Stride_Outlook_main\\\\index.html",
+    "serveVia": "node server.js -> http://127.0.0.1:4173",
+    "zephyrHost": "eu.api.zephyrscale.smartbear.com",
+    "scrumWasEmpty": true,
+    "manojAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+    "manojDisplayName": "Manoj Khanna"
+  },
+  "folder": {
+    "id": 1209778,
+    "name": "SCRUM-5",
+    "created": true,
+    "self": null
+  },
+  "probeCaseOnly": {
+    "key": "SCRUM-T65",
+    "id": 8837184,
+    "self": "https://eu.api.zephyrscale.smartbear.com/v2/testcases/SCRUM-T65",
+    "name": "SCRUM-5 API attachment capability probe (NOT an E2E case)",
+    "owner": {
+      "accountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "self": "https://chimeratechnologies-team-j7fyto3u.atlassian.net/rest/api/2/user?accountId=712020%3A6e2b5d5b-03ce-4c95-bf5e-0790a239be89"
+    },
+    "status": {
+      "id": 826138,
+      "self": "https://eu.api.zephyrscale.smartbear.com/v2/statuses/826138"
+    },
+    "folder": {
+      "id": 1209778,
+      "self": "https://eu.api.zephyrscale.smartbear.com/v2/folders/1209778"
+    },
+    "labels": [
+      "qa-capability-probe",
+      "scrum-5-phase2-gate"
+    ]
+  },
+  "attachmentCapability": {
+    "result": "PASSED",
+    "put": {
+      "method": "PUT",
+      "path": "/testcases/{key}/attachments/{fileName}",
+      "status": 200
+    },
+    "list": {
+      "method": "GET",
+      "path": "/testcases/{key}/attachments",
+      "status": 200
+    },
+    "download": {
+      "method": "GET",
+      "path": "/testcases/{key}/attachments/{attachmentId}",
+      "verified": true
+    },
+    "attachmentId": 5024895,
+    "fileName": "SCRUM-5_SCRUM-T65_CapabilityProbe.png",
+    "associatedWithCase": true
+  },
+  "artifacts": {
+    "capabilityProbe": "reports/SCRUM-5-phase2-gate/capability-probe.json",
+    "pilotResult": "reports/SCRUM-5-phase2-gate/attachment-pilot-result.json",
+    "localPng": "reports\\SCRUM-5-phase2-gate\\SCRUM-5_SCRUM-T65_CapabilityProbe.png"
+  },
+  "nextStepRequired": "User must authorize proceeding past Phase 2 (create five E2E cases) and choose commit/push vs local-only for Actions."
+}

@@ -2,8 +2,8 @@
 "use strict";
 
 /**
- * Create exactly FIVE Zephyr test cases linked to SCRUM-5 + dedicated cycle.
- * Idempotent via label SCRUM-5-E2E-2026-11-24 and name prefix.
+ * Create exactly FIVE Zephyr E2E test cases for SCRUM-5 Final cycle.
+ * Reuses folder SCRUM-5 (1209778). Preserves probe SCRUM-T65 (not counted).
  */
 
 const fs = require("node:fs");
@@ -11,157 +11,91 @@ const path = require("node:path");
 const { createZephyrWriteClient } = require("./zephyr-write-client");
 
 const JIRA_ISSUE_ID = 10004; // SCRUM-5
-const LABEL = "SCRUM-5-E2E-2026-11-24";
-const CYCLE_NAME = "SCRUM-5 Automated QA Validation - 2026-11-24";
+const FOLDER_ID = 1209778;
+const MANOJ_ACCOUNT_ID = "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89";
+const LABEL = "SCRUM-5-E2E-2026-11-25-FINAL";
+const CYCLE_NAME = "SCRUM-5 E2E QA Validation - 2026-11-25 Final";
+const OUT_DIR = path.join("reports", "SCRUM-5-e2e-final");
+const PROBE_KEY = "SCRUM-T65";
 
 const CASES = [
   {
-    slug: "valid-login",
-    name: "SCRUM-5 TC-A1: Valid login grants access to protected app shell",
+    slug: "brand-filter",
+    name: "SCRUM-5 Final TC-F1: Brand catalogue filter shows only matching brand shoes",
     objective:
-      "Verify authenticated users with valid credentials can access protected Shoe Planner functionality (AC-01).",
+      "Verify selecting a brand in the catalogue displays only shoes for that brand (AC-02, AC-06).",
     precondition:
-      "Application is available at the configured local AUT URL. Valid test credentials are configured for the approved test environment.",
+      "User can authenticate. Shoe catalogue is configured in the AUT.",
     steps: [
       {
-        description: "Open the application home page.",
-        testData: "baseURL from Playwright config",
+        description: "Log in with valid credentials and open Collection Brands.",
+        testData: "admin/admin",
+        expectedResult: "Brands tab is visible with brand filters."
+      },
+      {
+        description: "Select brand filter Nike.",
+        testData: "brand=Nike",
+        expectedResult: "Active filter shows Nike; every visible shoe card includes Nike."
+      }
+    ]
+  },
+  {
+    slug: "invalid-location",
+    name: "SCRUM-5 Final TC-F2: Invalid location search shows feedback without fabricated weather",
+    objective:
+      "Verify invalid locations do not fabricate LIVE FORECAST weather (AC-03).",
+    precondition: "User can authenticate. Geocoding returns no results for the probe string.",
+    steps: [
+      {
+        description: "Log in and enter an unsupported location string.",
+        testData: "ZZZ_NO_SUCH_CITY_99999",
+        expectedResult: "No location options appear; forecast is not LIVE FORECAST."
+      }
+    ]
+  },
+  {
+    slug: "trail-running",
+    name: "SCRUM-5 Final TC-F3: Trail Running with distance produces running recommendations",
+    objective:
+      "Verify Trail Running with a supported distance yields recommendation results or a clear empty state (AC-05).",
+    precondition: "User can authenticate. Location/weather stubs available for deterministic QA.",
+    steps: [
+      {
+        description: "Log in, open Running, set London, distance 10 km, type Trail Running.",
+        testData: "distance=10; type=Trail Running",
+        expectedResult: "Running shoe grid shows recommendation cards or an empty state."
+      }
+    ]
+  },
+  {
+    slug: "bike-commute",
+    name: "SCRUM-5 Final TC-F4: Bike commute recommendations appear after location and weather",
+    objective:
+      "Verify Bike commute recommendations appear after selecting location/weather (AC-04).",
+    precondition: "User can authenticate. Weather/location stubs available.",
+    steps: [
+      {
+        description: "Log in, select London, confirm LIVE FORECAST, select commute Bike.",
+        testData: "location=London; commute=Bike",
+        expectedResult: "Recommendation cards are visible; selection summary includes Bike."
+      }
+    ]
+  },
+  {
+    slug: "logout",
+    name: "SCRUM-5 Final TC-F5: Log out terminates authenticated session",
+    objective:
+      "Verify logging out hides the app shell and returns the login screen (AC-01).",
+    precondition: "Valid credentials available.",
+    steps: [
+      {
+        description: "Log in successfully then click Log out.",
+        testData: "admin/admin",
         expectedResult: "Login screen is visible; app shell is hidden."
-      },
-      {
-        description: "Enter valid username and password and submit Log in.",
-        testData: "username=admin; password=admin (test env only)",
-        expectedResult: "Welcome message is shown and app shell becomes visible."
-      },
-      {
-        description: "Confirm protected navigation is available.",
-        testData: "Running / Collection nav",
-        expectedResult: "Authenticated navigation controls are visible."
-      }
-    ]
-  },
-  {
-    slug: "mandatory-login-fields",
-    name: "SCRUM-5 TC-A2: Mandatory login fields prevent empty submission",
-    objective:
-      "Verify mandatory login fields are validated before authentication (AC-01).",
-    precondition: "Application login screen is accessible.",
-    steps: [
-      {
-        description: "Open the login screen.",
-        testData: "N/A",
-        expectedResult: "Username and password fields are present; password is masked."
-      },
-      {
-        description: "Attempt login with empty username and password.",
-        testData: "empty credentials",
-        expectedResult: "App shell remains hidden; user is not authenticated."
-      },
-      {
-        description: "Enter username only and attempt login.",
-        testData: "username=admin; password empty",
-        expectedResult: "App shell remains hidden; authentication is not granted."
-      }
-    ]
-  },
-  {
-    slug: "invalid-credentials",
-    name: "SCRUM-5 TC-A3: Invalid credentials are rejected with an appropriate message",
-    objective:
-      "Verify invalid credentials are rejected and protected content stays inaccessible (AC-01).",
-    precondition: "Login screen is accessible.",
-    steps: [
-      {
-        description: "Open the login screen.",
-        testData: "N/A",
-        expectedResult: "Login form is displayed."
-      },
-      {
-        description: "Submit invalid credentials.",
-        testData: "username=admin; password=wrong",
-        expectedResult: "An alert/error is shown and app shell remains hidden."
-      }
-    ]
-  },
-  {
-    slug: "running-distance-boundaries",
-    name: "SCRUM-5 TC-A4: Running distance boundaries 1 km and 42 km are enforced",
-    objective:
-      "Verify supported running distance range is enforced at minimum and maximum values (AC-05, AC-10).",
-    precondition: "User can authenticate. Weather/location services may be mocked in AUT.",
-    steps: [
-      {
-        description: "Log in with valid credentials.",
-        testData: "admin/admin",
-        expectedResult: "App shell is visible."
-      },
-      {
-        description: "Open Running section and set distance to 1 km.",
-        testData: "distance=1",
-        expectedResult: "Distance output shows 1 km."
-      },
-      {
-        description: "Set distance to 42 km.",
-        testData: "distance=42",
-        expectedResult: "Distance output shows 42 km."
-      }
-    ]
-  },
-  {
-    slug: "e2e-commute-recommendations",
-    name: "SCRUM-5 TC-A5: E2E login, location weather, commute recommendations, logout",
-    objective:
-      "Verify end-to-end workflow: authenticate, select location/weather, receive commute recommendations, and log out (AC-03, AC-04, AC-12).",
-    precondition: "AUT available; geocoding/weather may be stubbed for deterministic QA.",
-    steps: [
-      {
-        description: "Log in with valid credentials.",
-        testData: "admin/admin",
-        expectedResult: "Authenticated app shell is visible."
-      },
-      {
-        description: "Search and select a supported location (London).",
-        testData: "location=London",
-        expectedResult: "Live forecast state is shown for the selected location."
-      },
-      {
-        description: "Select commute type Bike and review recommendations.",
-        testData: "commute=Bike",
-        expectedResult: "Recommendation cards are visible for the selected commute."
-      },
-      {
-        description: "Log out of the application.",
-        testData: "N/A",
-        expectedResult: "Login screen returns; app shell is hidden."
       }
     ]
   }
 ];
-
-async function findExistingByLabel(client) {
-  const values = [];
-  let startAt = 0;
-  for (let page = 0; page < 20; page += 1) {
-    const data = await client.get("/testcases", {
-      projectKey: "SCRUM",
-      maxResults: 50,
-      startAt
-    });
-    const batch = data.values || [];
-    for (const tc of batch) {
-      const labels = tc.labels || [];
-      if (
-        labels.includes(LABEL) ||
-        /^SCRUM-5 TC-A[1-5]:/.test(String(tc.name || ""))
-      ) {
-        values.push(tc);
-      }
-    }
-    if (data.isLast || batch.length === 0) break;
-    startAt += batch.length;
-  }
-  return values;
-}
 
 async function ensureTestScript(client, key, steps) {
   await client.post(`/testcases/${encodeURIComponent(key)}/teststeps`, {
@@ -183,7 +117,6 @@ async function linkToScrum5(client, key) {
     });
     return { linked: true };
   } catch (err) {
-    // already linked or alternate payload
     if (err.status === 400 || err.status === 409) {
       return { linked: "possibly-existing", status: err.status, body: err.body };
     }
@@ -191,21 +124,55 @@ async function linkToScrum5(client, key) {
   }
 }
 
+async function findExistingFinalCases(client) {
+  const values = [];
+  let startAt = 0;
+  for (let page = 0; page < 20; page += 1) {
+    const data = await client.get("/testcases", {
+      projectKey: "SCRUM",
+      folderId: FOLDER_ID,
+      maxResults: 50,
+      startAt
+    });
+    for (const tc of data.values || []) {
+      if (tc.key === PROBE_KEY) continue;
+      const labels = tc.labels || [];
+      if (
+        labels.includes(LABEL) ||
+        /^SCRUM-5 Final TC-F[1-5]:/.test(String(tc.name || ""))
+      ) {
+        values.push(tc);
+      }
+    }
+    if (data.isLast || !(data.values || []).length) break;
+    startAt += (data.values || []).length;
+  }
+  return values;
+}
+
 async function main() {
   const client = createZephyrWriteClient(process.env);
-  const outDir = path.join("reports", "SCRUM-5-e2e");
-  fs.mkdirSync(outDir, { recursive: true });
+  fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const existing = await findExistingByLabel(client);
-  const byName = new Map(existing.map((tc) => [tc.name, tc]));
+  // Preserve probe
+  const probe = await client.get(`/testcases/${encodeURIComponent(PROBE_KEY)}`);
+  if (!probe || probe.key !== PROBE_KEY) {
+    throw new Error(`Probe ${PROBE_KEY} missing; refuse to continue.`);
+  }
 
+  const folder = await client.get(`/folders/${FOLDER_ID}`);
+  if (!folder || Number(folder.id) !== FOLDER_ID) {
+    throw new Error(`Folder ${FOLDER_ID} missing; refuse to create a duplicate.`);
+  }
+
+  const existing = await findExistingFinalCases(client);
   if (existing.length > 5) {
     console.error(
       JSON.stringify(
         {
           status: "FAILED",
-          reason: "More than five matching SCRUM-5 TC-A* cases already exist; refusing to create duplicates.",
-          existing: existing.map((t) => ({ key: t.key, id: t.id, name: t.name }))
+          reason: "More than five Final E2E cases already exist",
+          existing: existing.map((t) => ({ key: t.key, name: t.name }))
         },
         null,
         2
@@ -214,7 +181,9 @@ async function main() {
     process.exit(1);
   }
 
+  const byName = new Map(existing.map((tc) => [tc.name, tc]));
   const created = [];
+
   for (const spec of CASES) {
     let tc = byName.get(spec.name);
     if (!tc) {
@@ -223,30 +192,50 @@ async function main() {
         name: spec.name,
         objective: spec.objective,
         precondition: spec.precondition,
-        labels: [LABEL, "SCRUM-5", "Playwright", "automated"],
-        statusName: "Approved"
+        folderId: FOLDER_ID,
+        ownerId: MANOJ_ACCOUNT_ID,
+        statusName: "Approved",
+        priorityName: "Normal",
+        labels: [LABEL, "SCRUM-5", "Playwright", "automated", "e2e-final"]
       });
     }
-    const key = tc.key;
-    const id = tc.id;
-    await ensureTestScript(client, key, spec.steps);
-    const link = await linkToScrum5(client, key);
+    await ensureTestScript(client, tc.key, spec.steps);
+    const link = await linkToScrum5(client, tc.key);
+    const fetched = await client.get(`/testcases/${encodeURIComponent(tc.key)}`);
     created.push({
       slug: spec.slug,
-      key,
-      id,
+      key: tc.key,
+      id: tc.id || fetched.id,
       name: spec.name,
+      ownerAccountId: fetched.owner?.accountId || null,
+      statusId: fetched.status?.id || null,
+      folderId: fetched.folder?.id || null,
       jiraLink: link,
       reused: Boolean(byName.get(spec.name))
     });
   }
 
   if (created.length !== 5) {
-    console.error(JSON.stringify({ status: "FAILED", count: created.length, created }, null, 2));
+    console.error(JSON.stringify({ status: "FAILED", count: created.length }, null, 2));
     process.exit(1);
   }
 
-  // Find or create dedicated cycle
+  // Verify invariants
+  for (const c of created) {
+    if (c.key === PROBE_KEY) {
+      throw new Error("Probe T65 must not be one of the five E2E cases");
+    }
+    if (Number(c.folderId) !== FOLDER_ID) {
+      throw new Error(`${c.key} not in folder ${FOLDER_ID}`);
+    }
+    if (c.ownerAccountId !== MANOJ_ACCOUNT_ID) {
+      throw new Error(`${c.key} owner is not Manoj`);
+    }
+    if (Number(c.statusId) !== 826138) {
+      throw new Error(`${c.key} is not Approved`);
+    }
+  }
+
   let cycle = null;
   {
     let startAt = 0;
@@ -270,29 +259,32 @@ async function main() {
       projectKey: "SCRUM",
       name: CYCLE_NAME,
       description:
-        "Dedicated automated QA validation cycle for exactly five new SCRUM-5 Playwright test cases. Do not mix with SCRUM-R1."
+        "Final SCRUM-5 E2E validation cycle for exactly five Playwright cases in folder SCRUM-5. Excludes probe SCRUM-T65."
     });
   }
 
   const manifest = {
     status: "SUCCESS",
-    jiraStory: {
-      key: "SCRUM-5",
-      id: JIRA_ISSUE_ID,
-      url: "https://chimeratechnologies-team-j7fyto3u.atlassian.net/browse/SCRUM-5"
-    },
+    storyKey: "SCRUM-5",
+    storyTitle: "Dummy User stories",
+    jiraIssueId: JIRA_ISSUE_ID,
     label: LABEL,
+    folder: { id: FOLDER_ID, name: "SCRUM-5" },
+    probePreserved: { key: PROBE_KEY, id: probe.id },
+    assignee: {
+      displayName: "Manoj Khanna",
+      accountId: MANOJ_ACCOUNT_ID
+    },
     testCases: created,
     cycle: {
       key: cycle.key,
       id: cycle.id,
       name: cycle.name || CYCLE_NAME
-    },
-    note: "Exactly five cases. Cycle association occurs when executions are created for these keys only."
+    }
   };
 
   fs.writeFileSync(
-    path.join(outDir, "zephyr-assets.json"),
+    path.join(OUT_DIR, "zephyr-assets.json"),
     JSON.stringify(manifest, null, 2)
   );
   console.log(JSON.stringify(manifest, null, 2));

@@ -11,7 +11,11 @@ const { loadZephyrConfig, assertZephyrConfig } = require("../src/zephyr/zephyr-c
 function createZephyrWriteClient(env = process.env) {
   const config = assertZephyrConfig(loadZephyrConfig(env));
 
-  async function request(method, path, { query, body, formData } = {}) {
+  async function request(
+    method,
+    path,
+    { query, body, formData, rawBody, contentType } = {}
+  ) {
     const url = new URL(
       `${config.baseUrl}${path.startsWith("/") ? path : `/${path}`}`
     );
@@ -25,7 +29,10 @@ function createZephyrWriteClient(env = process.env) {
       Accept: "application/json"
     };
     let payload;
-    if (formData) {
+    if (rawBody !== undefined) {
+      headers["Content-Type"] = contentType || "application/octet-stream";
+      payload = rawBody;
+    } else if (formData) {
       payload = formData;
     } else if (body !== undefined) {
       headers["Content-Type"] = "application/json";
@@ -43,7 +50,7 @@ function createZephyrWriteClient(env = process.env) {
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      json = { raw: text.slice(0, 500) };
+      json = text ? { raw: text.slice(0, 500) } : null;
     }
     if (!res.ok) {
       const err = new Error(
@@ -64,6 +71,11 @@ function createZephyrWriteClient(env = process.env) {
     get: (path, query) => request("GET", path, { query }),
     post: (path, body) => request("POST", path, { body }),
     put: (path, body) => request("PUT", path, { body }),
+    /**
+     * PUT raw binary body with an explicit MIME Content-Type (attachment upload).
+     */
+    putBinary: (path, rawBody, contentType) =>
+      request("PUT", path, { rawBody, contentType }),
     postForm: (path, formData) => request("POST", path, { formData })
   };
 }

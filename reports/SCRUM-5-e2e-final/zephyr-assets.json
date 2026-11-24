@@ -1,0 +1,91 @@
+{
+  "status": "SUCCESS",
+  "storyKey": "SCRUM-5",
+  "storyTitle": "Dummy User stories",
+  "jiraIssueId": 10004,
+  "label": "SCRUM-5-E2E-2026-11-25-FINAL",
+  "folder": {
+    "id": 1209778,
+    "name": "SCRUM-5"
+  },
+  "probePreserved": {
+    "key": "SCRUM-T65",
+    "id": 8837184
+  },
+  "assignee": {
+    "displayName": "Manoj Khanna",
+    "accountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89"
+  },
+  "testCases": [
+    {
+      "slug": "brand-filter",
+      "key": "SCRUM-T66",
+      "id": 8837186,
+      "name": "SCRUM-5 Final TC-F1: Brand catalogue filter shows only matching brand shoes",
+      "ownerAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "statusId": 826138,
+      "folderId": 1209778,
+      "jiraLink": {
+        "linked": true
+      },
+      "reused": false
+    },
+    {
+      "slug": "invalid-location",
+      "key": "SCRUM-T67",
+      "id": 8837187,
+      "name": "SCRUM-5 Final TC-F2: Invalid location search shows feedback without fabricated weather",
+      "ownerAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "statusId": 826138,
+      "folderId": 1209778,
+      "jiraLink": {
+        "linked": true
+      },
+      "reused": false
+    },
+    {
+      "slug": "trail-running",
+      "key": "SCRUM-T68",
+      "id": 8837188,
+      "name": "SCRUM-5 Final TC-F3: Trail Running with distance produces running recommendations",
+      "ownerAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "statusId": 826138,
+      "folderId": 1209778,
+      "jiraLink": {
+        "linked": true
+      },
+      "reused": false
+    },
+    {
+      "slug": "bike-commute",
+      "key": "SCRUM-T69",
+      "id": 8837189,
+      "name": "SCRUM-5 Final TC-F4: Bike commute recommendations appear after location and weather",
+      "ownerAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "statusId": 826138,
+      "folderId": 1209778,
+      "jiraLink": {
+        "linked": true
+      },
+      "reused": false
+    },
+    {
+      "slug": "logout",
+      "key": "SCRUM-T70",
+      "id": 8837190,
+      "name": "SCRUM-5 Final TC-F5: Log out terminates authenticated session",
+      "ownerAccountId": "712020:6e2b5d5b-03ce-4c95-bf5e-0790a239be89",
+      "statusId": 826138,
+      "folderId": 1209778,
+      "jiraLink": {
+        "linked": true
+      },
+      "reused": false
+    }
+  ],
+  "cycle": {
+    "key": "SCRUM-R5",
+    "id": 2335055,
+    "name": "SCRUM-5 E2E QA Validation - 2026-11-25 Final"
+  }
+}

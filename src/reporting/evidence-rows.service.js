@@ -39,11 +39,15 @@ function buildEvidenceRegisterRows(data = {}) {
         storyKey: e.storyKey || storyKey || "",
         testCaseKey: e.testCaseKey || "",
         testCaseName: e.testCaseName || "",
-        executionId: e.executionId || e.testExecutionId || "",
+        executionId: e.executionId || e.testExecutionId || e.executionKey || "",
         evidenceFilename: filename || "",
         evidenceType: e.evidenceType || (filename ? "screenshot" : ""),
-        evidenceLocation: e.evidenceLocation || "",
+        attachmentTarget: e.attachmentTarget || e.target || "",
+        attachmentId: e.attachmentId || e.remoteId || "",
+        evidenceLocation: e.evidenceLocation || e.destination || "",
         uploadStatus: uploaded ? "Uploaded" : "Not Uploaded",
+        metadataVerified: Boolean(e.metadataVerified),
+        downloadVerified: Boolean(e.downloadVerified),
         evidenceCount: Number.isFinite(count) ? count : filename ? 1 : 0,
         comments: e.comments || e.comment || ""
       };
