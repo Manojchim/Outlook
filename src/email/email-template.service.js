@@ -57,6 +57,10 @@ QA Automation Team
 }
 
 function buildValidationSubject(data) {
+  if (data.reportingSource === "LIVE_ZEPHYR") {
+    const cycleName = data.testCycleName || data.testCycleKey || data.storyTitle;
+    return `QA Automation Execution Report – ${data.projectKey || "SCRUM"} – ${cycleName} – ${data.executionDate}`;
+  }
   return `QA Automation Execution Report – ${data.projectName || data.storyKey} – ${data.executionDate}`;
 }
 
@@ -69,13 +73,18 @@ The automated QA test execution has been completed.
 Please find the attached execution reports in PDF and Excel formats.
 
 Execution Summary:
-- Project: ${data.projectName}
+- Reporting Source: ${data.reportingSourceLabel || data.reportingSource || "UNKNOWN"}
+- Project: ${data.projectName || data.projectKey || ""}
+- Test Cycle: ${data.testCycleName || data.testCycleKey || data.storyKey}
 - Execution Date: ${data.executionDate}
 - Total Test Cases: ${m.totalTestCases}
+- Executed: ${m.executed}
 - Passed: ${m.passed}
 - Failed: ${m.failed}
-- Skipped: ${m.notExecuted}
 - Blocked: ${m.blocked}
+- Skipped: ${m.skipped ?? 0}
+- Not Executed: ${m.notExecuted}
+- In Progress: ${m.inProgress ?? 0}
 - Execution Status: ${data.overallStatus}
 
 Regards,

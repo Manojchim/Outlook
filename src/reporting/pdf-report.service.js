@@ -74,10 +74,12 @@ async function writePdfReport(data, outputPath) {
 
     doc.font("Helvetica").fontSize(10);
     const headerLines = [
-      `Project: ${data.projectName}`,
-      `Jira User Story: ${data.storyKey} — ${data.storyTitle}`,
+      `Reporting Source: ${data.reportingSourceLabel || data.reportingSource || "UNKNOWN"}`,
+      `Project: ${data.projectName || data.projectKey || ""}`,
+      `Project Key: ${data.projectKey || ""}`,
+      `Jira User Story / Scope: ${data.storyKey} — ${data.storyTitle}`,
       `Environment: ${data.environment}`,
-      `Test Cycle: ${data.testCycleKey}${data.dummyCycleKey ? ` (dummy ${data.dummyCycleKey})` : ""}`,
+      `Test Cycle: ${data.testCycleName || data.testCycleKey || ""}${data.testCycleKey ? ` (${data.testCycleKey})` : ""}${data.dummyCycleKey ? ` (dummy ${data.dummyCycleKey})` : ""}`,
       `Execution Date: ${data.executionDate}`,
       `Report Generated: ${data.reportGeneratedAt}`,
       `Overall QA Status: ${data.overallStatus}`
@@ -98,8 +100,11 @@ async function writePdfReport(data, outputPath) {
         ["Passed", m.passed],
         ["Failed", m.failed],
         ["Blocked", m.blocked],
+        ["Skipped", m.skipped ?? 0],
         ["Not Executed", m.notExecuted],
-        ["Bugs Created", m.bugsCreated],
+        ["In Progress", m.inProgress ?? 0],
+        ["Unknown Status", m.unknown ?? 0],
+        ["Bugs / Defects Linked", m.bugsCreated],
         ["Screenshots Uploaded", m.screenshotsUploaded],
         ["Execution Completion %", m.executionCompletionPercent],
         ["Pass % (of executed)", m.passPercent]
@@ -107,33 +112,53 @@ async function writePdfReport(data, outputPath) {
       y
     );
 
-    y = sectionTitle(doc, "C. Acceptance Criteria Coverage", y);
-    y = drawTable(
-      doc,
-      ["AC", "Test Cases", "Status", "Bugs"],
-      (data.acceptanceCriteria || []).map((ac) => [
-        `${ac.id}: ${ac.description}`,
-        (ac.testCaseKeys || []).join(", "),
-        ac.status,
-        (ac.relatedBugs || []).join(", ") || "—"
-      ]),
-      y
-    );
+    if ((data.acceptanceCriteria || []).length) {
+      y = sectionTitle(doc, "C. Acceptance Criteria Coverage", y);
+      y = drawTable(
+        doc,
+        ["AC", "Test Cases", "Status", "Bugs"],
+        (data.acceptanceCriteria || []).map((ac) => [
+          `${ac.id}: ${ac.description}`,
+          (ac.testCaseKeys || []).join(", "),
+          ac.status,
+          (ac.relatedBugs || []).join(", ") || "—"
+        ]),
+        y
+      );
+    }
 
     y = sectionTitle(doc, "D. Detailed Test Execution Results", y);
     y = drawTable(
       doc,
-      ["Key", "Scenario", "Expected", "Actual", "Status", "Exec ID"],
+      ["Key", "Name", "Status", "Zephyr Status", "Executed By", "When", "Exec ID", "Defects"],
       (data.testCases || []).map((tc) => [
         tc.key,
         tc.name,
-        tc.expectedResult,
-        tc.actualResult,
         tc.status,
-        tc.executionId
+        tc.originalStatus,
+        tc.executedBy,
+        tc.executionDate,
+        tc.executionId,
+        Array.isArray(tc.linkedDefects) ? tc.linkedDefects.join(", ") : tc.bugId
       ]),
       y
     );
+
+    if ((data.steps || []).length) {
+      y = sectionTitle(doc, "D2. Test Step Results", y);
+      y = drawTable(
+        doc,
+        ["Case", "Step", "Status", "Actual", "When"],
+        (data.steps || []).map((s) => [
+          s.testCaseKey,
+          s.index,
+          s.status,
+          s.actualResult,
+          s.actualEndDate
+        ]),
+        y
+      );
+    }
 
     y = sectionTitle(doc, "E. Bug Summary", y);
     y = drawTable(

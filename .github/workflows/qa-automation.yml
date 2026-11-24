@@ -1,20 +1,39 @@
 name: QA Automation
 
-# Runs Playwright e2e tests and maps SMTP / recipient configuration from
-# GitHub Secrets and Variables. Automatic email delivery stays DISABLED.
+# Maps SMTP / Zephyr credentials from GitHub Secrets and Variables.
+# Automatic email delivery stays DISABLED (QA_REPORT_AUTO_SEND=false).
 on:
   workflow_dispatch:
     inputs:
+      report_data_source:
+        description: "Report data source: sample (fixture) or zephyr (live read-only API)"
+        type: choice
+        options:
+          - sample
+          - zephyr
+        default: sample
+      project_key:
+        description: "Jira/Zephyr project key"
+        type: string
+        default: SCRUM
+      test_cycle_key:
+        description: "Required for zephyr source (e.g. SCRUM-R1). Ignored for sample."
+        type: string
+        default: ""
       smtp_validate_only:
         description: "Only validate SMTP configuration and authentication (no tests, no email send)"
         type: boolean
         default: true
       send_test_email:
-        description: "After SMTP verify succeeds, send ONE smoke-test email (no PDF/Excel, auto-send stays off)"
+        description: "After SMTP verify succeeds, send ONE smoke-test email (no PDF/Excel)"
         type: boolean
         default: false
       send_validation_email:
-        description: "Generate PDF+Excel QA reports and send ONE validation email with both attachments (auto-send stays off)"
+        description: "Send ONE sample-fixture validation email with PDF+Excel (explicit only; default false)"
+        type: boolean
+        default: false
+      send_email:
+        description: "Reserved live-report email flag. Must remain false until explicitly approved."
         type: boolean
         default: false
       run_tests:
@@ -35,15 +54,19 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Never enable auto-send from CI until Phase 1 receipt is confirmed.
   QA_REPORT_AUTO_SEND: "false"
   QA_EMAIL_PROVIDER: smtp
   QA_REPORT_FORMATS: pdf,xlsx
 
 jobs:
   validate-smtp:
-    name: Validate SMTP (no send)
+    name: Validate SMTP (no send by default)
     runs-on: ubuntu-latest
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      inputs.smtp_validate_only == true ||
+      inputs.send_test_email == true ||
+      inputs.send_validation_email == true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,8 +82,6 @@ jobs:
 
       - name: SMTP configuration and authentication check
         env:
-          # Prefer repository Secrets; fall back to Variables if Secrets are unset.
-          # SMTP_PASSWORD should be a Secret (not a Variable). Never echo values.
           SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
@@ -71,7 +92,6 @@ jobs:
           QA_REPORT_AUTO_SEND: "false"
         run: |
           set -euo pipefail
-          # Presence check without printing secret values
           missing=0
           for name in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL TEST_EMAIL_RECIPIENT; do
             eval "val=\${$name-}"
@@ -106,7 +126,7 @@ jobs:
           echo "Sending one smoke-test email (no attachments). Credentials are not printed."
           node scripts/smtp-smoke-test.js --send-test
 
-      - name: Generate PDF/Excel and send ONE QA validation email
+      - name: Generate sample PDF/Excel and send ONE validation email
         if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
@@ -118,14 +138,12 @@ jobs:
           QA_EMAIL_PROVIDER: smtp
           QA_REPORT_AUTO_SEND: "false"
           QA_REPORT_FORMATS: pdf,xlsx
+          REPORT_DATA_SOURCE: sample
         run: |
           set -euo pipefail
-          echo "Verifying PDF/Excel consistency from Phase 1 SCRUM-5 fixture (no credentials printed)."
-          node scripts/verify-report-consistency.js
-          echo "Sending ONE validation email with PDF + Excel attachments. Auto-send remains false."
-          node scripts/qa-report-send.js --send-validation --story SCRUM-5
-          echo "Report files:"
-          ls -la reports/QA/SCRUM-5/ || true
+          echo "Sample fixture validation email path only. Auto-send remains false."
+          node scripts/verify-report-consistency.js --source sample
+          node scripts/qa-report-send.js --send-validation --source sample --story SCRUM-5
 
       - name: Upload validation reports
         if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true && always()
@@ -136,10 +154,82 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  zephyr-report:
+    name: QA report (sample or live Zephyr)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      REPORT_DATA_SOURCE: ${{ inputs.report_data_source }}
+      ZEPHYR_PROJECT_KEY: ${{ inputs.project_key }}
+      ZEPHYR_TEST_CYCLE_KEY: ${{ inputs.test_cycle_key }}
+      ZEPHYR_SCALE_API_TOKEN: ${{ secrets.ZEPHYR_SCALE_API_TOKEN || secrets.ZEPHYR_API_TOKEN }}
+      ZEPHYR_SCALE_API_BASE_URL: ${{ secrets.ZEPHYR_SCALE_API_BASE_URL || vars.ZEPHYR_SCALE_API_BASE_URL }}
+      QA_REPORT_AUTO_SEND: "false"
+      QA_REPORT_FORMATS: pdf,xlsx
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Guardrails (no auto-send; live requires cycle + secrets)
+        run: |
+          set -euo pipefail
+          echo "REPORT_DATA_SOURCE=$REPORT_DATA_SOURCE"
+          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
+          echo "send_email input=${{ inputs.send_email }}"
+          if [ "${{ inputs.send_email }}" = "true" ]; then
+            echo "::error::send_email must remain false until explicitly approved after live report review."
+            exit 1
+          fi
+          if [ "$REPORT_DATA_SOURCE" = "zephyr" ]; then
+            if [ -z "${ZEPHYR_TEST_CYCLE_KEY}" ]; then
+              echo "::error::test_cycle_key is required for report_data_source=zephyr. Sample fallback is disabled."
+              exit 1
+            fi
+            if [ -z "${ZEPHYR_SCALE_API_TOKEN}" ]; then
+              echo "::error::ZEPHYR_SCALE_API_TOKEN (or ZEPHYR_API_TOKEN) secret is missing."
+              exit 1
+            fi
+            if [ -z "${ZEPHYR_SCALE_API_BASE_URL}" ]; then
+              echo "::error::ZEPHYR_SCALE_API_BASE_URL secret/variable is missing. Set the official regional HTTPS base URL."
+              exit 1
+            fi
+            echo "ZEPHYR_SCALE_API_TOKEN=set"
+            echo "ZEPHYR_SCALE_API_BASE_URL=set"
+            echo "ZEPHYR_TEST_CYCLE_KEY=set"
+          fi
+
+      - name: Generate reports + consistency validation (no email)
+        run: |
+          set -euo pipefail
+          if [ "$REPORT_DATA_SOURCE" = "zephyr" ]; then
+            node scripts/verify-report-consistency.js --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
+          else
+            node scripts/verify-report-consistency.js --source sample --story SCRUM-5
+          fi
+          echo "Reports generated. Email was not sent. QA_REPORT_AUTO_SEND remains false."
+          find reports/QA -type f -print || true
+
+      - name: Upload QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-zephyr-reports-${{ github.run_id }}
+          path: reports/QA/**
+          if-no-files-found: warn
+          retention-days: 14
+
   playwright-e2e:
     name: Playwright e2e
     runs-on: ubuntu-latest
-    # Skip heavy tests when the dispatch input is validate-only.
     if: >
       github.event_name != 'workflow_dispatch' ||
       inputs.run_tests == true ||
@@ -153,6 +243,7 @@ jobs:
       TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
       QA_EMAIL_PROVIDER: smtp
       QA_REPORT_AUTO_SEND: "false"
+      REPORT_DATA_SOURCE: sample
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -180,24 +271,19 @@ jobs:
               echo "$name=set"
             fi
           done
-          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND (must remain false until Phase 1 confirmation)"
+          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
 
       - name: Run Playwright tests
         id: tests
         run: npm run test:e2e
-        continue-on-error: false
 
-      - name: Generate PDF and Excel QA reports
+      - name: Generate sample PDF/Excel QA reports
         id: reports
         if: always() && steps.tests.outcome != 'skipped'
-        run: node --env-file-if-exists=.env scripts/qa-report-send.js --generate-only --story SCRUM-5
+        run: node scripts/qa-report-send.js --generate-only --source sample --story SCRUM-5
         continue-on-error: true
 
-      # Email delivery is intentionally NOT invoked here.
-      # After SMTP validation succeeds and you confirm, a future change may add
-      # --send-validation behind an explicit workflow input with continue-on-error.
-
-      - name: Upload QA reports (preserved even if email later fails)
+      - name: Upload QA reports
         if: always()
         uses: actions/upload-artifact@v4
         with:

@@ -42,6 +42,9 @@ const {
 function parseArgs(argv) {
   const args = {
     story: "SCRUM-5",
+    source: process.env.REPORT_DATA_SOURCE || "sample",
+    project: process.env.ZEPHYR_PROJECT_KEY || "SCRUM",
+    cycle: process.env.ZEPHYR_TEST_CYCLE_KEY || null,
     authOnly: false,
     validateSmtp: false,
     generateOnly: false,
@@ -58,6 +61,9 @@ function parseArgs(argv) {
     else if (a === "--force-device-code") args.forceDeviceCode = true;
     else if (a === "--force-resend") args.forceResend = true;
     else if (a === "--story") args.story = argv[++i];
+    else if (a === "--source") args.source = argv[++i];
+    else if (a === "--project") args.project = argv[++i];
+    else if (a === "--cycle") args.cycle = argv[++i];
     else if (a === "--help" || a === "-h") args.help = true;
   }
   return args;
@@ -69,7 +75,10 @@ function printHelp() {
   --validate-smtp          Check SMTP env + connection/auth (does NOT send email)
   --auth-only              Run Microsoft device-code auth only (Outlook provider)
   --send-validation        Generate reports + send Phase 1 validation email
-  --story SCRUM-5          Story key (Phase 1 sample: SCRUM-5)
+  --source sample|zephyr   Report data source (default: sample / REPORT_DATA_SOURCE)
+  --project SCRUM          Jira/Zephyr project key for live mode
+  --cycle SCRUM-R1         Zephyr test cycle key/ID (required for --source zephyr)
+  --story SCRUM-5          Story key (sample mode: SCRUM-5)
   --force-device-code       Ignore cached token and re-authenticate (Outlook)
   --force-resend           Bypass duplicate-send protection (use carefully)
 `);
@@ -200,7 +209,10 @@ async function main() {
   }
 
   const generated = await generateStoryReports(args.story, {
-    formats: config.formats
+    formats: config.formats,
+    source: args.source,
+    projectKey: args.project,
+    testCycleKey: args.cycle
   });
   if (!generated.ok) {
     console.error(

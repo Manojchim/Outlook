@@ -45,23 +45,31 @@ async function writeExcelReport(data, outputPath) {
   workbook.creator = "Stride QA Automation";
   workbook.created = new Date();
 
-  const summary = workbook.addWorksheet("Executive Summary");
+  const summary = workbook.addWorksheet("Execution Summary");
   summary.addRow(["Field", "Value"]);
   styleHeader(summary.getRow(1));
   const m = data.metrics;
   const summaryRows = [
-    ["User Story ID", data.storyKey],
-    ["User Story Title", data.storyTitle],
-    ["Test Cycle", data.testCycleKey],
+    ["Reporting Source", data.reportingSourceLabel || data.reportingSource],
+    ["Project Key", data.projectKey],
+    ["Project Name", data.projectName],
+    ["User Story / Scope ID", data.storyKey],
+    ["User Story / Scope Title", data.storyTitle],
+    ["Test Cycle Key", data.testCycleKey],
+    ["Test Cycle Name", data.testCycleName || data.testCycleKey],
     ["Environment", data.environment],
     ["Execution Date", data.executionDate],
     ["Report Generated At", data.reportGeneratedAt],
+    ["Overall Status", data.overallStatus],
     ["Total Test Cases", m.totalTestCases],
     ["Executed", m.executed],
     ["Passed", m.passed],
     ["Failed", m.failed],
     ["Blocked", m.blocked],
+    ["Skipped", m.skipped ?? 0],
     ["Not Executed", m.notExecuted],
+    ["In Progress", m.inProgress ?? 0],
+    ["Unknown Status", m.unknown ?? 0],
     ["Bugs Created", m.bugsCreated],
     ["Evidence Uploaded", m.screenshotsUploaded],
     ["Execution Completion %", m.executionCompletionPercent],
@@ -73,6 +81,46 @@ async function writeExcelReport(data, outputPath) {
   summary.autoFilter = { from: "A1", to: "B1" };
   autosize(summary, [28, 90]);
 
+  const details = workbook.addWorksheet("Test Case Details");
+  const detailHeaders = [
+    "Test Case Key",
+    "Test Case Name",
+    "Execution ID",
+    "Execution Status",
+    "Original Zephyr Status",
+    "Executed By",
+    "Execution Date",
+    "Duration (ms)",
+    "Comments",
+    "Linked Defects"
+  ];
+  details.addRow(detailHeaders);
+  styleHeader(details.getRow(1));
+  for (const tc of data.testCases || []) {
+    const row = details.addRow([
+      tc.key,
+      tc.name,
+      tc.executionId,
+      tc.status,
+      tc.originalStatus,
+      tc.executedBy,
+      tc.executionDate,
+      tc.durationMs,
+      tc.comments || tc.actualResult,
+      Array.isArray(tc.linkedDefects)
+        ? tc.linkedDefects.join(", ")
+        : tc.bugId || ""
+    ]);
+    applyStatusFill(row.getCell(4));
+  }
+  details.views = [{ state: "frozen", ySplit: 1 }];
+  details.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: detailHeaders.length }
+  };
+  autosize(details, [16, 36, 14, 14, 18, 18, 18, 12, 36, 24]);
+
+  // Preserve prior sheet name used by consistency checks / older consumers
   const exec = workbook.addWorksheet("Test Case Execution");
   const execHeaders = [
     "Jira User Story ID",
@@ -99,7 +147,7 @@ async function writeExcelReport(data, outputPath) {
       tc.key,
       tc.name,
       tc.priority,
-      tc.regression ? "Yes" : "No",
+      tc.regression == null ? "" : tc.regression ? "Yes" : "No",
       tc.preconditions,
       tc.steps,
       tc.testData,
@@ -120,7 +168,38 @@ async function writeExcelReport(data, outputPath) {
   };
   autosize(exec, [14, 16, 36, 10, 12, 24, 28, 20, 28, 28, 12, 12, 10, 28, 16]);
 
-  const bugs = workbook.addWorksheet("Bug Details");
+  const stepSheet = workbook.addWorksheet("Step Details");
+  const stepHeaders = [
+    "Test Case Key",
+    "Execution ID",
+    "Step Index",
+    "Description",
+    "Expected Result",
+    "Actual Result",
+    "Status",
+    "Original Status",
+    "Actual End Date"
+  ];
+  stepSheet.addRow(stepHeaders);
+  styleHeader(stepSheet.getRow(1));
+  for (const s of data.steps || []) {
+    const row = stepSheet.addRow([
+      s.testCaseKey,
+      s.testExecutionId,
+      s.index,
+      s.description,
+      s.expectedResult,
+      s.actualResult,
+      s.status,
+      s.originalStatus,
+      s.actualEndDate
+    ]);
+    applyStatusFill(row.getCell(7));
+  }
+  stepSheet.views = [{ state: "frozen", ySplit: 1 }];
+  autosize(stepSheet, [16, 14, 10, 36, 28, 28, 12, 16, 18]);
+
+  const bugs = workbook.addWorksheet("Defects");
   const bugHeaders = [
     "Jira Bug ID",
     "Bug Summary",
@@ -148,68 +227,55 @@ async function writeExcelReport(data, outputPath) {
     ]);
   }
   bugs.views = [{ state: "frozen", ySplit: 1 }];
-  bugs.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: bugHeaders.length }
-  };
   autosize(bugs, [12, 40, 50, 10, 10, 14, 14, 12, 14]);
 
-  const ac = workbook.addWorksheet("Acceptance Criteria");
-  const acHeaders = [
-    "Acceptance Criterion ID",
-    "Acceptance Criterion Description",
-    "Linked Test Cases",
-    "Execution Status",
-    "Coverage Status",
-    "Related Bugs"
+  const meta = workbook.addWorksheet("Execution Metadata");
+  meta.addRow(["Field", "Value"]);
+  styleHeader(meta.getRow(1));
+  const md = data.metadata || {};
+  const metaRows = [
+    ["reportingSource", data.reportingSource],
+    ["reportingSourceLabel", data.reportingSourceLabel],
+    ["projectKey", data.projectKey],
+    ["testCycleKey", data.testCycleKey],
+    ["testCycleId", data.testCycleId],
+    ["testCycleName", data.testCycleName],
+    ["apiRetrievedAt", md.apiRetrievedAt],
+    ["executionCountRaw", md.executionCountRaw],
+    ["executionCountDeduped", md.executionCountDeduped],
+    ["cyclePlannedStartDate", md.cyclePlannedStartDate],
+    ["cyclePlannedEndDate", md.cyclePlannedEndDate],
+    ["fixturePath", md.fixturePath || null],
+    ["unknownStatuses", (data.unknownStatuses || []).join(", ")]
   ];
-  ac.addRow(acHeaders);
-  styleHeader(ac.getRow(1));
-  for (const item of data.acceptanceCriteria || []) {
-    const row = ac.addRow([
-      item.id,
-      item.description,
-      (item.testCaseKeys || []).join(", "),
-      item.status,
-      item.status === "PASS" ? "Covered" : "Gaps / Failures",
-      (item.relatedBugs || []).join(", ")
-    ]);
-    applyStatusFill(row.getCell(4));
-  }
-  ac.views = [{ state: "frozen", ySplit: 1 }];
-  ac.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: acHeaders.length }
-  };
-  autosize(ac, [14, 40, 36, 14, 16, 16]);
+  for (const row of metaRows) meta.addRow(row);
+  autosize(meta, [28, 80]);
 
-  const evidence = workbook.addWorksheet("Evidence Tracking");
-  const evHeaders = [
-    "Test Case Key",
-    "Screenshot Filename",
-    "Local Evidence Path",
-    "Zephyr Attachment Status",
-    "Attachment Verification",
-    "Execution Reference"
-  ];
-  evidence.addRow(evHeaders);
-  styleHeader(evidence.getRow(1));
-  for (const e of data.evidence || []) {
-    evidence.addRow([
-      e.testCaseKey,
-      e.screenshotFilename,
-      e.localPath,
-      e.zephyrAttachmentStatus,
-      e.attachmentVerification,
-      e.executionReference
-    ]);
+  if ((data.acceptanceCriteria || []).length) {
+    const ac = workbook.addWorksheet("Acceptance Criteria");
+    const acHeaders = [
+      "Acceptance Criterion ID",
+      "Acceptance Criterion Description",
+      "Linked Test Cases",
+      "Execution Status",
+      "Coverage Status",
+      "Related Bugs"
+    ];
+    ac.addRow(acHeaders);
+    styleHeader(ac.getRow(1));
+    for (const item of data.acceptanceCriteria || []) {
+      const row = ac.addRow([
+        item.id,
+        item.description,
+        (item.testCaseKeys || []).join(", "),
+        item.status,
+        item.status === "PASS" ? "Covered" : "Gaps / Failures",
+        (item.relatedBugs || []).join(", ")
+      ]);
+      applyStatusFill(row.getCell(4));
+    }
+    autosize(ac, [14, 40, 36, 14, 16, 16]);
   }
-  evidence.views = [{ state: "frozen", ySplit: 1 }];
-  evidence.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: evHeaders.length }
-  };
-  autosize(evidence, [14, 32, 50, 18, 18, 16]);
 
   await require("node:fs").promises.mkdir(path.dirname(outputPath), {
     recursive: true
