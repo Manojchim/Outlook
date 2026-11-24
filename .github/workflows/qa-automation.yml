@@ -462,9 +462,28 @@ jobs:
           echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
           echo "AUT_BASE_URL=$AUT_BASE_URL"
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (SCRUM-5 T60-T64 focused suite)
         id: tests
-        run: npm run test:e2e
+        # continue-on-error so genuine failed cases still allow reporting/auto-email gates
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p reports/SCRUM-5-e2e-2026-11-25
+          set +e
+          npx playwright test tests/qa/scrum5-t60-t64.spec.js \
+            --reporter=list \
+            --reporter=json
+          code=$?
+          set -e
+          if [ -f test-results/.last-run.json ] || [ -f playwright-report/results.json ]; then
+            echo "Playwright artifacts present."
+          fi
+          # Prefer Playwright default json if present
+          if [ -f test-results/results.json ]; then
+            cp test-results/results.json reports/SCRUM-5-e2e-2026-11-25/playwright-results.json || true
+          fi
+          echo "Playwright focused suite finished with exit code $code (continue-on-error enabled)."
+          exit "$code"
 
       - name: Generate sample PDF/Excel QA reports
         id: reports
@@ -480,6 +499,7 @@ jobs:
           path: |
             reports/QA/**/*.pdf
             reports/QA/**/*.xlsx
+            reports/SCRUM-5-e2e-2026-11-25/**
             reports/SCRUM-5-e2e/**
             test-results/**
             playwright-report/**

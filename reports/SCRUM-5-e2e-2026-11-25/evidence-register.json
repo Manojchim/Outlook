@@ -1,0 +1,126 @@
+{
+  "cycleKey": "SCRUM-R4",
+  "generatedAt": "2026-11-24T19:58:25.253Z",
+  "rows": [
+    {
+      "testCaseKey": "SCRUM-T61",
+      "executionKey": "SCRUM-E33",
+      "filename": "SCRUM-5_SCRUM-T61_InvalidSearch.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E33",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E33/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T61",
+      "executionKey": "SCRUM-E33",
+      "filename": "SCRUM-5_SCRUM-T61_NoFabricatedWeather.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E33",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E33/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T62",
+      "executionKey": "SCRUM-E34",
+      "filename": "SCRUM-5_SCRUM-T62_TrailConfigured.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E34",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E34/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T62",
+      "executionKey": "SCRUM-E34",
+      "filename": "SCRUM-5_SCRUM-T62_TrailResults.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E34",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E34/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T63",
+      "executionKey": "SCRUM-E35",
+      "filename": "SCRUM-5_SCRUM-T63_BikeRecommendations.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E35",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E35/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T63",
+      "executionKey": "SCRUM-E35",
+      "filename": "SCRUM-5_SCRUM-T63_LocationWeather.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E35",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E35/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T64",
+      "executionKey": "SCRUM-E36",
+      "filename": "SCRUM-5_SCRUM-T64_Authenticated.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E36",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E36/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T64",
+      "executionKey": "SCRUM-E36",
+      "filename": "SCRUM-5_SCRUM-T64_LoggedOut.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E36",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E36/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T60",
+      "executionKey": "SCRUM-E37",
+      "filename": "SCRUM-5_SCRUM-T60_BrandsTab.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E37",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E37/attachments failed HTTP 405",
+      "httpStatus": 405
+    },
+    {
+      "testCaseKey": "SCRUM-T60",
+      "executionKey": "SCRUM-E37",
+      "filename": "SCRUM-5_SCRUM-T60_NikeFiltered.png",
+      "type": "screenshot",
+      "destination": "Zephyr execution SCRUM-E37",
+      "uploadStatus": "Failed",
+      "remoteId": null,
+      "verified": false,
+      "error": "Zephyr POST /v2/testexecutions/SCRUM-E37/attachments failed HTTP 405",
+      "httpStatus": 405
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "storyKey": "SCRUM-5",
+  "storyTitle": "Dummy User stories",
+  "jiraIssueId": 10004,
+  "label": "SCRUM-5-E2E-2026-11-25",
+  "cycle": {
+    "id": 2335029,
+    "key": "SCRUM-R4",
+    "name": "SCRUM-5 E2E QA Validation - 2026-11-25"
+  },
+  "testCases": [
+    {
+      "key": "SCRUM-T60",
+      "slug": "brand-filter",
+      "name": "SCRUM-5 TC-B1: Brand catalogue filter shows only matching brand shoes"
+    },
+    {
+      "key": "SCRUM-T61",
+      "slug": "invalid-location",
+      "name": "SCRUM-5 TC-B2: Invalid location search shows feedback without fabricated weather"
+    },
+    {
+      "key": "SCRUM-T62",
+      "slug": "trail-running",
+      "name": "SCRUM-5 TC-B4: Trail Running with distance produces running recommendations"
+    },
+    {
+      "key": "SCRUM-T63",
+      "slug": "bike-commute",
+      "name": "SCRUM-5 TC-B3: Bike commute recommendations appear after location and weather"
+    },
+    {
+      "key": "SCRUM-T64",
+      "slug": "logout",
+      "name": "SCRUM-5 TC-B5: Log out terminates authenticated session"
+    }
+  ]
+}
