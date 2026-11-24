@@ -31,6 +31,7 @@ function loadStoryReportData(storyKey = "SCRUM-5", options = {}) {
     );
   }
 
+  const { buildEvidenceRegisterRows } = require("./evidence-rows.service");
   const raw = JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8"));
   const data = structuredClone(raw);
   data.reportGeneratedAt =
@@ -41,8 +42,10 @@ function loadStoryReportData(storyKey = "SCRUM-5", options = {}) {
   data.projectKey = data.projectKey || "SCRUM";
   data.projectName = data.projectName || "SCRUM / Stride Shoe Planner";
   data.testCycleName = data.testCycleName || data.testCycleKey || null;
+  data.testCycleId = data.testCycleId || null;
   data.unknownStatuses = [];
   data.steps = data.steps || [];
+  data.evidence = buildEvidenceRegisterRows(data);
   data.metadata = {
     source: "sample",
     fixturePath: "src/reporting/fixtures/scrum-5-sample.json"
@@ -131,6 +134,8 @@ async function loadReportData(options = {}, env = process.env) {
   return loadZephyrReportData({
     projectKey: options.projectKey || env.ZEPHYR_PROJECT_KEY || "SCRUM",
     testCycleKey: options.testCycleKey || env.ZEPHYR_TEST_CYCLE_KEY,
+    storyKey: options.storyKey || env.JIRA_STORY_KEY || null,
+    storyTitle: options.storyTitle || env.JIRA_STORY_TITLE || null,
     env,
     client: options.client,
     fetchTestCaseDetails: options.fetchTestCaseDetails !== false,

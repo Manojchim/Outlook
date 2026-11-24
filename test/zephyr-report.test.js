@@ -397,6 +397,8 @@ test("PDF/Excel generate from live-shaped data and stay consistent", async () =>
     projectKey: "SCRUM",
     projectName: "SCRUM",
     cycle: { id: 1, key: "SCRUM-R7", name: "Regression 7" },
+    jiraStoryKey: "SCRUM-5",
+    jiraStoryTitle: "Dummy User stories",
     executions: [
       mapExecutionRecord({
         id: 11,
@@ -421,11 +423,16 @@ test("PDF/Excel generate from live-shaped data and stay consistent", async () =>
   liveShaped.testCases[0].name = "Case 11";
   liveShaped.testCases[1].name = "Case 12";
 
+  assert.equal(liveShaped.storyKey, "SCRUM-5");
+  assert.equal(liveShaped.storyTitle, "Dummy User stories");
+  assert.equal(liveShaped.testCycleKey, "SCRUM-R7");
+  assert.equal(liveShaped.testCycleId, "1");
+
   const check = validateReportData(liveShaped);
   assert.equal(check.ok, true, check.errors.join("; "));
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zephyr-report-"));
-  const generated = await generateStoryReports("SCRUM-R7", {
+  const generated = await generateStoryReports("SCRUM-5", {
     data: liveShaped,
     reportsRoot: tmp
   });
@@ -434,6 +441,22 @@ test("PDF/Excel generate from live-shaped data and stay consistent", async () =>
   assert.ok(fs.existsSync(generated.files.xlsx));
   assert.match(path.basename(generated.files.pdf), /LIVE/);
   assert.equal(generated.data.reportingSourceLabel, "LIVE ZEPHYR DATA");
+
+  const ExcelJS = require("exceljs");
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(generated.files.xlsx);
+  const sheetNames = wb.worksheets.map((ws) => ws.name);
+  for (const required of [
+    "Execution Summary",
+    "Test Case Details",
+    "Step Results",
+    "Defects",
+    "Evidence Register",
+    "Execution Metadata"
+  ]) {
+    assert.ok(sheetNames.includes(required), `missing sheet ${required}`);
+  }
+  assert.equal(sheetNames.includes("Step Details"), false);
 });
 
 test("status with embedded name maps without lookup", async () => {
@@ -642,6 +665,8 @@ test("EU live-shaped loader resolves Pass + test case names with one status look
   const data = await loadZephyrReportData({
     projectKey: "SCRUM",
     testCycleKey: "SCRUM-R1",
+    storyKey: "SCRUM-5",
+    storyTitle: "Dummy User stories",
     client,
     env: {
       ZEPHYR_SCALE_API_TOKEN: "token-abc",
@@ -649,6 +674,9 @@ test("EU live-shaped loader resolves Pass + test case names with one status look
     }
   });
 
+  assert.equal(data.storyKey, "SCRUM-5");
+  assert.equal(data.storyTitle, "Dummy User stories");
+  assert.equal(data.testCycleKey, "SCRUM-R1");
   assert.equal(data.testCases.length, 26);
   assert.equal(data.metrics.totalTestCases, 26);
   assert.equal(data.metrics.passed, 26);

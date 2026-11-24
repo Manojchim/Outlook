@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const PDFDocument = require("pdfkit");
+const { buildEvidenceRegisterRows } = require("./evidence-rows.service");
 
 function drawTable(doc, headers, rows, startY) {
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -67,6 +68,7 @@ async function writePdfReport(data, outputPath) {
     doc.pipe(stream);
 
     let y = doc.page.margins.top;
+    const gh = data.github || {};
     doc.font("Helvetica-Bold").fontSize(16).text("QA Execution Report", {
       align: "left"
     });
@@ -75,14 +77,21 @@ async function writePdfReport(data, outputPath) {
     doc.font("Helvetica").fontSize(10);
     const headerLines = [
       `Reporting Source: ${data.reportingSourceLabel || data.reportingSource || "UNKNOWN"}`,
-      `Project: ${data.projectName || data.projectKey || ""}`,
-      `Project Key: ${data.projectKey || ""}`,
-      `Jira User Story / Scope: ${data.storyKey} — ${data.storyTitle}`,
-      `Environment: ${data.environment}`,
-      `Test Cycle: ${data.testCycleName || data.testCycleKey || ""}${data.testCycleKey ? ` (${data.testCycleKey})` : ""}${data.dummyCycleKey ? ` (dummy ${data.dummyCycleKey})` : ""}`,
-      `Execution Date: ${data.executionDate}`,
-      `Report Generated: ${data.reportGeneratedAt}`,
-      `Overall QA Status: ${data.overallStatus}`
+      `Jira Story Key: ${data.storyKey || "Not available"}`,
+      `Jira Story Title: ${data.storyTitle || "Not available"}`,
+      `Zephyr Project: ${data.projectKey || ""}`,
+      `Project Name: ${data.projectName || data.projectKey || ""}`,
+      `Cycle Key: ${data.testCycleKey || "Not available"}`,
+      `Cycle ID: ${data.testCycleId || "Not available"}`,
+      `Cycle Name: ${data.testCycleName || data.testCycleKey || ""}`,
+      `Environment: ${data.environment || ""}`,
+      `Execution Date: ${data.executionDate || ""}`,
+      `Report Generated: ${data.reportGeneratedAt || ""}`,
+      `GitHub Repository: ${gh.repository || "Not available"}`,
+      `GitHub Branch: ${gh.branch || "Not available"}`,
+      `GitHub Commit SHA: ${gh.commitSha || "Not available"}`,
+      `GitHub Actions Run URL: ${gh.runUrl || "Not available"}`,
+      `Overall QA Status: ${data.overallStatus || ""}`
     ];
     for (const line of headerLines) {
       doc.text(line);
@@ -105,7 +114,7 @@ async function writePdfReport(data, outputPath) {
         ["In Progress", m.inProgress ?? 0],
         ["Unknown Status", m.unknown ?? 0],
         ["Bugs / Defects Linked", m.bugsCreated],
-        ["Screenshots Uploaded", m.screenshotsUploaded],
+        ["Screenshots Uploaded (Zephyr-confirmed)", m.screenshotsUploaded],
         ["Execution Completion %", m.executionCompletionPercent],
         ["Pass % (of executed)", m.passPercent]
       ],
@@ -174,14 +183,17 @@ async function writePdfReport(data, outputPath) {
       y
     );
 
-    y = sectionTitle(doc, "F. Screenshot Evidence Summary", y);
+    const evidenceRows = buildEvidenceRegisterRows(data);
+    y = sectionTitle(doc, "F. Evidence Availability", y);
     y = drawTable(
       doc,
-      ["Test Case", "Screenshot", "Zephyr Verified"],
-      (data.evidence || []).map((e) => [
+      ["Case", "Execution", "Filename", "Upload Status", "Count"],
+      evidenceRows.map((e) => [
         e.testCaseKey,
-        e.screenshotFilename,
-        e.attachmentVerification
+        e.executionId,
+        e.evidenceFilename || "(none)",
+        e.uploadStatus,
+        e.evidenceCount
       ]),
       y
     );

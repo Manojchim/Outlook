@@ -73,18 +73,38 @@ async function main() {
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(xlsxPath);
-  const summary =
-    workbook.getWorksheet("Execution Summary") ||
-    workbook.getWorksheet("Executive Summary");
-  const details =
-    workbook.getWorksheet("Test Case Details") ||
-    workbook.getWorksheet("Test Case Execution");
-  if (!summary || !details) {
+  const requiredSheets = [
+    "Execution Summary",
+    "Test Case Details",
+    "Step Results",
+    "Defects",
+    "Evidence Register",
+    "Execution Metadata"
+  ];
+  const presentSheets = workbook.worksheets.map((ws) => ws.name);
+  const missingSheets = requiredSheets.filter((n) => !presentSheets.includes(n));
+  if (missingSheets.length) {
     console.error(
       JSON.stringify({
         status: "FAILED",
         stage: "excel_sheets",
-        message: "Expected Execution Summary and Test Case Details/Execution sheets"
+        message: "Excel is missing required worksheets",
+        missingSheets,
+        presentSheets
+      })
+    );
+    process.exit(1);
+  }
+  const summary = workbook.getWorksheet("Execution Summary");
+  const details = workbook.getWorksheet("Test Case Details");
+  const evidence = workbook.getWorksheet("Evidence Register");
+  const meta = workbook.getWorksheet("Execution Metadata");
+  if (!summary || !details || !evidence || !meta) {
+    console.error(
+      JSON.stringify({
+        status: "FAILED",
+        stage: "excel_sheets",
+        message: "Expected required Excel worksheets including Evidence Register"
       })
     );
     process.exit(1);
@@ -120,17 +140,37 @@ async function main() {
     });
   }
 
-  const cycleIdentity =
-    excel["Test Cycle Key"] || excel["User Story / Scope ID"] || excel["User Story ID"];
+  const cycleIdentity = excel["Cycle Key"] || excel["Test Cycle Key"];
   if (
     generated.data.testCycleKey &&
-    String(cycleIdentity) !== String(generated.data.testCycleKey) &&
-    String(cycleIdentity) !== String(generated.data.storyKey)
+    String(cycleIdentity) !== String(generated.data.testCycleKey)
   ) {
     mismatches.push({
-      field: "Test cycle identity",
+      field: "Cycle Key",
       expected: generated.data.testCycleKey,
       actual: cycleIdentity
+    });
+  }
+
+  if (
+    generated.data.storyKey &&
+    String(excel["Jira Story Key"] || "") !== String(generated.data.storyKey)
+  ) {
+    mismatches.push({
+      field: "Jira Story Key",
+      expected: generated.data.storyKey,
+      actual: excel["Jira Story Key"]
+    });
+  }
+
+  if (
+    generated.data.storyTitle &&
+    String(excel["Jira Story Title"] || "") !== String(generated.data.storyTitle)
+  ) {
+    mismatches.push({
+      field: "Jira Story Title",
+      expected: generated.data.storyTitle,
+      actual: excel["Jira Story Title"]
     });
   }
 
@@ -144,6 +184,56 @@ async function main() {
       field: "Reporting Source",
       expected: generated.data.reportingSourceLabel,
       actual: sourceLabel
+    });
+  }
+
+  const evidenceHeaders = [];
+  evidence.getRow(1).eachCell((cell) => evidenceHeaders.push(String(cell.value || "")));
+  for (const required of [
+    "Jira Story",
+    "Test Case Key",
+    "Evidence Filename",
+    "Upload Status",
+    "Evidence Count"
+  ]) {
+    if (!evidenceHeaders.includes(required)) {
+      mismatches.push({
+        field: "Evidence Register header",
+        expected: required,
+        actual: evidenceHeaders.join(", ")
+      });
+    }
+  }
+  evidence.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const uploadStatus = String(row.getCell(8).value || "");
+    const evidenceCount = Number(row.getCell(9).value);
+    const filename = String(row.getCell(5).value || "");
+    if (evidenceCount === 0 && uploadStatus === "Uploaded") {
+      mismatches.push({
+        field: "Evidence honesty",
+        expected: "Not Uploaded when count=0",
+        actual: `row ${rowNumber}`
+      });
+    }
+    if (!filename && uploadStatus === "Uploaded") {
+      mismatches.push({
+        field: "Evidence honesty",
+        expected: "Not Uploaded when filename blank",
+        actual: `row ${rowNumber}`
+      });
+    }
+  });
+
+  const metaMap = summaryMapFromSheet(meta);
+  if (
+    generated.data.storyKey &&
+    String(metaMap.jiraStoryKey || "") !== String(generated.data.storyKey)
+  ) {
+    mismatches.push({
+      field: "Execution Metadata jiraStoryKey",
+      expected: generated.data.storyKey,
+      actual: metaMap.jiraStoryKey
     });
   }
 

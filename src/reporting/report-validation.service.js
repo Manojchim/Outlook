@@ -1,14 +1,16 @@
 "use strict";
 
 const fs = require("node:fs");
+const { REQUIRED_WORKSHEETS } = require("./excel-report.service");
+const { buildEvidenceRegisterRows } = require("./evidence-rows.service");
 
 function validateReportData(data) {
   const errors = [];
-  if (!data?.storyKey && !data?.testCycleKey) {
-    errors.push("Missing storyKey/testCycleKey");
+  if (!data?.storyKey) {
+    errors.push("Missing Jira storyKey");
   }
-  if (!data?.storyTitle && !data?.testCycleName) {
-    errors.push("Missing storyTitle/testCycleName");
+  if (!data?.storyTitle) {
+    errors.push("Missing Jira storyTitle");
   }
   if (!data?.metrics) errors.push("Missing metrics");
   if (!data?.recommendation) errors.push("Missing recommendation");
@@ -23,6 +25,12 @@ function validateReportData(data) {
   }
   if (data?.reportingSource === "SAMPLE" && data?.reportingSourceLabel !== "SAMPLE DATA") {
     errors.push("Sample reports must be labeled SAMPLE DATA");
+  }
+  if (data?.reportingSource === "LIVE_ZEPHYR" && !data?.testCycleKey) {
+    errors.push("Live reports require testCycleKey");
+  }
+  if (data?.reportingSource === "LIVE_ZEPHYR" && !data?.testCycleId) {
+    errors.push("Live reports require testCycleId");
   }
 
   const m = data?.metrics || {};
@@ -50,6 +58,23 @@ function validateReportData(data) {
     errors.push(
       `metrics.totalTestCases (${m.totalTestCases}) does not match testCases.length (${data.testCases.length})`
     );
+  }
+
+  const evidenceRows = buildEvidenceRegisterRows(data);
+  for (const row of evidenceRows) {
+    if (
+      Number(row.evidenceCount) === 0 &&
+      String(row.uploadStatus) === "Uploaded"
+    ) {
+      errors.push(
+        `Evidence for ${row.testCaseKey || "(unknown)"} claims Uploaded with evidenceCount=0`
+      );
+    }
+    if (!row.evidenceFilename && String(row.uploadStatus) === "Uploaded") {
+      errors.push(
+        `Evidence for ${row.testCaseKey || "(unknown)"} claims Uploaded without a filename`
+      );
+    }
   }
 
   return { ok: errors.length === 0, errors };
@@ -100,8 +125,25 @@ function compareSharedMetrics(left, right) {
   return { ok: mismatches.length === 0, mismatches };
 }
 
+function validateExcelWorksheetNames(sheetNames = []) {
+  const names = sheetNames.map(String);
+  const missing = REQUIRED_WORKSHEETS.filter((n) => !names.includes(n));
+  const extrasBlocking = ["Step Details"]; // renamed; must not remain
+  const unexpectedLegacy = extrasBlocking.filter((n) => names.includes(n));
+  const errors = [];
+  if (missing.length) {
+    errors.push(`Missing required worksheets: ${missing.join(", ")}`);
+  }
+  if (unexpectedLegacy.length) {
+    errors.push(`Legacy worksheet names still present: ${unexpectedLegacy.join(", ")}`);
+  }
+  return { ok: errors.length === 0, errors, required: REQUIRED_WORKSHEETS };
+}
+
 module.exports = {
   validateReportData,
   validateReportFiles,
-  compareSharedMetrics
+  compareSharedMetrics,
+  validateExcelWorksheetNames,
+  REQUIRED_WORKSHEETS
 };

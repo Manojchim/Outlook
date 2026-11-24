@@ -2,6 +2,16 @@
 
 const path = require("node:path");
 const ExcelJS = require("exceljs");
+const { buildEvidenceRegisterRows } = require("./evidence-rows.service");
+
+const REQUIRED_WORKSHEETS = [
+  "Execution Summary",
+  "Test Case Details",
+  "Step Results",
+  "Defects",
+  "Evidence Register",
+  "Execution Metadata"
+];
 
 function styleHeader(row) {
   row.font = { bold: true };
@@ -38,7 +48,7 @@ function autosize(sheet, widths) {
 }
 
 /**
- * Write a multi-sheet Excel QA report.
+ * Write a multi-sheet Excel QA report with the required worksheet set.
  */
 async function writeExcelReport(data, outputPath) {
   const workbook = new ExcelJS.Workbook();
@@ -49,17 +59,23 @@ async function writeExcelReport(data, outputPath) {
   summary.addRow(["Field", "Value"]);
   styleHeader(summary.getRow(1));
   const m = data.metrics;
+  const gh = data.github || {};
   const summaryRows = [
     ["Reporting Source", data.reportingSourceLabel || data.reportingSource],
-    ["Project Key", data.projectKey],
-    ["Project Name", data.projectName],
-    ["User Story / Scope ID", data.storyKey],
-    ["User Story / Scope Title", data.storyTitle],
-    ["Test Cycle Key", data.testCycleKey],
-    ["Test Cycle Name", data.testCycleName || data.testCycleKey],
+    ["Jira Story Key", data.storyKey || ""],
+    ["Jira Story Title", data.storyTitle || ""],
+    ["Zephyr Project", data.projectKey || ""],
+    ["Project Name", data.projectName || ""],
+    ["Cycle Key", data.testCycleKey || ""],
+    ["Cycle ID", data.testCycleId || ""],
+    ["Cycle Name", data.testCycleName || data.testCycleKey || ""],
     ["Environment", data.environment],
     ["Execution Date", data.executionDate],
     ["Report Generated At", data.reportGeneratedAt],
+    ["GitHub Repository", gh.repository || ""],
+    ["GitHub Branch", gh.branch || ""],
+    ["GitHub Commit SHA", gh.commitSha || ""],
+    ["GitHub Actions Run URL", gh.runUrl || ""],
     ["Overall Status", data.overallStatus],
     ["Total Test Cases", m.totalTestCases],
     ["Executed", m.executed],
@@ -83,6 +99,7 @@ async function writeExcelReport(data, outputPath) {
 
   const details = workbook.addWorksheet("Test Case Details");
   const detailHeaders = [
+    "Jira Story Key",
     "Test Case Key",
     "Test Case Name",
     "Execution ID",
@@ -98,6 +115,7 @@ async function writeExcelReport(data, outputPath) {
   styleHeader(details.getRow(1));
   for (const tc of data.testCases || []) {
     const row = details.addRow([
+      data.storyKey || "",
       tc.key,
       tc.name,
       tc.executionId,
@@ -111,64 +129,16 @@ async function writeExcelReport(data, outputPath) {
         ? tc.linkedDefects.join(", ")
         : tc.bugId || ""
     ]);
-    applyStatusFill(row.getCell(4));
+    applyStatusFill(row.getCell(5));
   }
   details.views = [{ state: "frozen", ySplit: 1 }];
   details.autoFilter = {
     from: { row: 1, column: 1 },
     to: { row: 1, column: detailHeaders.length }
   };
-  autosize(details, [16, 36, 14, 14, 18, 18, 18, 12, 36, 24]);
+  autosize(details, [14, 16, 36, 14, 14, 18, 18, 18, 12, 36, 24]);
 
-  // Preserve prior sheet name used by consistency checks / older consumers
-  const exec = workbook.addWorksheet("Test Case Execution");
-  const execHeaders = [
-    "Jira User Story ID",
-    "Zephyr Test Case Key",
-    "Test Case Name",
-    "Priority",
-    "Regression Testing",
-    "Preconditions",
-    "Test Steps",
-    "Test Data",
-    "Expected Result",
-    "Actual Result",
-    "Execution Status",
-    "Execution ID",
-    "Bug ID",
-    "Screenshot Filename",
-    "Attachment Verification Status"
-  ];
-  exec.addRow(execHeaders);
-  styleHeader(exec.getRow(1));
-  for (const tc of data.testCases || []) {
-    const row = exec.addRow([
-      data.storyKey,
-      tc.key,
-      tc.name,
-      tc.priority,
-      tc.regression == null ? "" : tc.regression ? "Yes" : "No",
-      tc.preconditions,
-      tc.steps,
-      tc.testData,
-      tc.expectedResult,
-      tc.actualResult,
-      tc.status,
-      tc.executionId,
-      tc.bugId || "",
-      tc.screenshotFilename || "",
-      tc.attachmentVerified || ""
-    ]);
-    applyStatusFill(row.getCell(11));
-  }
-  exec.views = [{ state: "frozen", ySplit: 1 }];
-  exec.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: execHeaders.length }
-  };
-  autosize(exec, [14, 16, 36, 10, 12, 24, 28, 20, 28, 28, 12, 12, 10, 28, 16]);
-
-  const stepSheet = workbook.addWorksheet("Step Details");
+  const stepSheet = workbook.addWorksheet("Step Results");
   const stepHeaders = [
     "Test Case Key",
     "Execution ID",
@@ -220,7 +190,7 @@ async function writeExcelReport(data, outputPath) {
       b.description,
       b.priority,
       b.status,
-      b.relatedStory,
+      b.relatedStory || data.storyKey || "",
       b.relatedTestCase,
       b.executionId,
       b.createdDate
@@ -229,6 +199,39 @@ async function writeExcelReport(data, outputPath) {
   bugs.views = [{ state: "frozen", ySplit: 1 }];
   autosize(bugs, [12, 40, 50, 10, 10, 14, 14, 12, 14]);
 
+  const evidenceSheet = workbook.addWorksheet("Evidence Register");
+  const evidenceHeaders = [
+    "Jira Story",
+    "Test Case Key",
+    "Test Case Name",
+    "Zephyr Execution ID",
+    "Evidence Filename",
+    "Evidence Type",
+    "Evidence Location",
+    "Upload Status",
+    "Evidence Count",
+    "Comments"
+  ];
+  evidenceSheet.addRow(evidenceHeaders);
+  styleHeader(evidenceSheet.getRow(1));
+  const evidenceRows = buildEvidenceRegisterRows(data);
+  for (const e of evidenceRows) {
+    evidenceSheet.addRow([
+      e.storyKey,
+      e.testCaseKey,
+      e.testCaseName,
+      e.executionId,
+      e.evidenceFilename,
+      e.evidenceType,
+      e.evidenceLocation,
+      e.uploadStatus,
+      e.evidenceCount,
+      e.comments
+    ]);
+  }
+  evidenceSheet.views = [{ state: "frozen", ySplit: 1 }];
+  autosize(evidenceSheet, [12, 14, 36, 16, 36, 12, 40, 14, 12, 40]);
+
   const meta = workbook.addWorksheet("Execution Metadata");
   meta.addRow(["Field", "Value"]);
   styleHeader(meta.getRow(1));
@@ -236,10 +239,17 @@ async function writeExcelReport(data, outputPath) {
   const metaRows = [
     ["reportingSource", data.reportingSource],
     ["reportingSourceLabel", data.reportingSourceLabel],
+    ["jiraStoryKey", data.storyKey],
+    ["jiraStoryTitle", data.storyTitle],
+    ["zephyrProject", data.projectKey],
     ["projectKey", data.projectKey],
     ["testCycleKey", data.testCycleKey],
     ["testCycleId", data.testCycleId],
     ["testCycleName", data.testCycleName],
+    ["githubRepository", gh.repository || null],
+    ["githubBranch", gh.branch || null],
+    ["githubCommitSha", gh.commitSha || null],
+    ["githubRunUrl", gh.runUrl || null],
     ["apiRetrievedAt", md.apiRetrievedAt],
     ["executionCountRaw", md.executionCountRaw],
     ["executionCountDeduped", md.executionCountDeduped],
@@ -251,30 +261,11 @@ async function writeExcelReport(data, outputPath) {
   for (const row of metaRows) meta.addRow(row);
   autosize(meta, [28, 80]);
 
-  if ((data.acceptanceCriteria || []).length) {
-    const ac = workbook.addWorksheet("Acceptance Criteria");
-    const acHeaders = [
-      "Acceptance Criterion ID",
-      "Acceptance Criterion Description",
-      "Linked Test Cases",
-      "Execution Status",
-      "Coverage Status",
-      "Related Bugs"
-    ];
-    ac.addRow(acHeaders);
-    styleHeader(ac.getRow(1));
-    for (const item of data.acceptanceCriteria || []) {
-      const row = ac.addRow([
-        item.id,
-        item.description,
-        (item.testCaseKeys || []).join(", "),
-        item.status,
-        item.status === "PASS" ? "Covered" : "Gaps / Failures",
-        (item.relatedBugs || []).join(", ")
-      ]);
-      applyStatusFill(row.getCell(4));
+  const names = workbook.worksheets.map((ws) => ws.name);
+  for (const required of REQUIRED_WORKSHEETS) {
+    if (!names.includes(required)) {
+      throw new Error(`Excel report missing required worksheet: ${required}`);
     }
-    autosize(ac, [14, 40, 36, 14, 16, 16]);
   }
 
   await require("node:fs").promises.mkdir(path.dirname(outputPath), {
@@ -284,4 +275,4 @@ async function writeExcelReport(data, outputPath) {
   return outputPath;
 }
 
-module.exports = { writeExcelReport };
+module.exports = { writeExcelReport, REQUIRED_WORKSHEETS };

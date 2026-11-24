@@ -37,6 +37,8 @@ function assertCycleKey(projectKey, cycleKey) {
 async function loadZephyrReportData({
   projectKey,
   testCycleKey,
+  storyKey = null,
+  storyTitle = null,
   env = process.env,
   client,
   fetchTestCaseDetails = true,
@@ -142,11 +144,24 @@ async function loadZephyrReportData({
     );
   }
 
+  const jiraStoryKey =
+    storyKey ||
+    env.JIRA_STORY_KEY ||
+    env.ZEPHYR_JIRA_STORY_KEY ||
+    null;
+  const jiraStoryTitle =
+    storyTitle ||
+    env.JIRA_STORY_TITLE ||
+    env.ZEPHYR_JIRA_STORY_TITLE ||
+    null;
+
   const report = buildReportDataFromZephyr({
     projectKey: resolvedProject,
     projectName: `Jira / Zephyr Scale (${resolvedProject})`,
     cycle,
-    executions: mapped
+    executions: mapped,
+    jiraStoryKey,
+    jiraStoryTitle
   });
 
   report.zephyrConfigSummary = summarizeZephyrConfig(config);

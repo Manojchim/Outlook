@@ -313,13 +313,36 @@ function mapExecutionRecord(
   };
 }
 
+function extractIssueKeyFromCycle(cycle) {
+  const issues = cycle?.links?.issues;
+  if (!Array.isArray(issues)) return null;
+  for (const issue of issues) {
+    const key =
+      asNullableString(issue?.issueKey) ||
+      asNullableString(issue?.key) ||
+      null;
+    if (key) return key;
+  }
+  return null;
+}
+
+/**
+ * Trusted story titles from prior Jira inventory / fixture metadata.
+ * Used only when a story key is known and no live title was supplied.
+ */
+const TRUSTED_STORY_TITLES = {
+  "SCRUM-5": "Dummy User stories"
+};
+
 function buildReportDataFromZephyr({
   projectKey,
   projectName,
   cycle,
   executions,
-  environment = null
-}) {
+  environment = null,
+  jiraStoryKey = null,
+  jiraStoryTitle = null
+} = {}) {
   const deduped = dedupeExecutions(executions);
   const metrics = computeMetricsFromExecutions(deduped);
   const overallStatus = deriveOverallStatus(metrics);
@@ -380,14 +403,63 @@ function buildReportDataFromZephyr({
     );
   }
 
+  const resolvedStoryKey =
+    asNullableString(jiraStoryKey) ||
+    extractIssueKeyFromCycle(cycle) ||
+    null;
+  const resolvedStoryTitle =
+    asNullableString(jiraStoryTitle) ||
+    (resolvedStoryKey && TRUSTED_STORY_TITLES[resolvedStoryKey]
+      ? TRUSTED_STORY_TITLES[resolvedStoryKey]
+      : null) ||
+    (resolvedStoryKey ? "Not available" : null);
+
+  const testCases = deduped.map((e) => ({
+    key: e.testCaseKey,
+    name: e.testCaseName,
+    priority: e.priority,
+    regression: e.regression,
+    preconditions: e.preconditions,
+    steps: (e.steps || [])
+      .map((s) => s.description || s.actualResult || "")
+      .filter(Boolean)
+      .join(" | "),
+    testData: null,
+    expectedResult: e.expectedResult,
+    actualResult: e.actualResult,
+    status: e.normalizedStatus,
+    originalStatus: e.originalStatus,
+    statusId: e.statusId,
+    statusName: e.statusName,
+    executionId: e.testExecutionId,
+    executedBy: e.executedBy,
+    executionDate: e.executionDate,
+    durationMs: e.durationMs,
+    comments: e.comments,
+    linkedDefects: e.linkedDefects,
+    bugId: e.bugId,
+    screenshotFilename: e.screenshotFilename,
+    attachmentVerified: e.attachmentVerified
+  }));
+
+  const { buildEvidenceRegisterRows } = require("../reporting/evidence-rows.service");
+  const evidence = buildEvidenceRegisterRows({
+    storyKey: resolvedStoryKey,
+    testCases
+  });
+  const uploadedCount = evidence.filter((e) => e.uploadStatus === "Uploaded").length;
+  metrics.screenshotsUploaded = uploadedCount;
+
   return {
     reportingSource: "LIVE_ZEPHYR",
     reportingSourceLabel: "LIVE ZEPHYR DATA",
     projectKey,
     projectName: projectName || projectKey,
-    storyKey: cycle?.key || projectKey,
-    storyTitle: cycle?.name || cycle?.key || "Zephyr Test Cycle",
-    storyUrl: null,
+    storyKey: resolvedStoryKey,
+    storyTitle: resolvedStoryTitle,
+    storyUrl: resolvedStoryKey
+      ? `https://chimeratechnologies-team-j7fyto3u.atlassian.net/browse/${resolvedStoryKey}`
+      : null,
     environment: environment || "Zephyr Scale Cloud",
     testCycleKey: cycle?.key || null,
     testCycleId: cycle?.id != null ? String(cycle.id) : null,
@@ -400,36 +472,10 @@ function buildReportDataFromZephyr({
     metrics,
     unknownStatuses,
     acceptanceCriteria: [],
-    testCases: deduped.map((e) => ({
-      key: e.testCaseKey,
-      name: e.testCaseName,
-      priority: e.priority,
-      regression: e.regression,
-      preconditions: e.preconditions,
-      steps: (e.steps || [])
-        .map((s) => s.description || s.actualResult || "")
-        .filter(Boolean)
-        .join(" | "),
-      testData: null,
-      expectedResult: e.expectedResult,
-      actualResult: e.actualResult,
-      status: e.normalizedStatus,
-      originalStatus: e.originalStatus,
-      statusId: e.statusId,
-      statusName: e.statusName,
-      executionId: e.testExecutionId,
-      executedBy: e.executedBy,
-      executionDate: e.executionDate,
-      durationMs: e.durationMs,
-      comments: e.comments,
-      linkedDefects: e.linkedDefects,
-      bugId: e.bugId,
-      screenshotFilename: e.screenshotFilename,
-      attachmentVerified: e.attachmentVerified
-    })),
+    testCases,
     steps,
     bugs,
-    evidence: [],
+    evidence,
     outstandingIssues: unknownStatuses.map(
       (s) => `Unknown Zephyr status observed: ${s}`
     ),
