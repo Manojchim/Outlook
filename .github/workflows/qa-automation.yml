@@ -13,6 +13,10 @@ on:
         description: "After SMTP verify succeeds, send ONE smoke-test email (no PDF/Excel, auto-send stays off)"
         type: boolean
         default: false
+      send_validation_email:
+        description: "Generate PDF+Excel QA reports and send ONE validation email with both attachments (auto-send stays off)"
+        type: boolean
+        default: false
       run_tests:
         description: "Run Playwright e2e tests"
         type: boolean
@@ -84,7 +88,10 @@ jobs:
           node scripts/smtp-smoke-test.js --verify-only
 
       - name: Send one SMTP smoke-test email
-        if: github.event_name == 'workflow_dispatch' && inputs.send_test_email == true
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          inputs.send_test_email == true &&
+          inputs.send_validation_email != true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
@@ -98,6 +105,36 @@ jobs:
           set -euo pipefail
           echo "Sending one smoke-test email (no attachments). Credentials are not printed."
           node scripts/smtp-smoke-test.js --send-test
+
+      - name: Generate PDF/Excel and send ONE QA validation email
+        if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || vars.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
+          TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
+          QA_EMAIL_PROVIDER: smtp
+          QA_REPORT_AUTO_SEND: "false"
+          QA_REPORT_FORMATS: pdf,xlsx
+        run: |
+          set -euo pipefail
+          echo "Verifying PDF/Excel consistency from Phase 1 SCRUM-5 fixture (no credentials printed)."
+          node scripts/verify-report-consistency.js
+          echo "Sending ONE validation email with PDF + Excel attachments. Auto-send remains false."
+          node scripts/qa-report-send.js --send-validation --story SCRUM-5
+          echo "Report files:"
+          ls -la reports/QA/SCRUM-5/ || true
+
+      - name: Upload validation reports
+        if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-validation-reports-${{ github.run_id }}
+          path: reports/QA/**
+          if-no-files-found: warn
+          retention-days: 14
 
   playwright-e2e:
     name: Playwright e2e
