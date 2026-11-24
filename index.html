@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <title>Stride — your daily shoe edit</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+    <form class="login-card" id="login-form">
+      <a class="brand" href="#" aria-label="Stride"><span class="brand-mark">↗</span> stride</a>
+      <div class="eyebrow">WELCOME BACK</div>
+      <h1 id="login-title">Step into your day.</h1>
+      <p class="intro-sub">Sign in to see your personal shoe edit.</p>
+      <label class="login-label" for="login-username">Username</label>
+      <input class="login-input" id="login-username" name="username" autocomplete="username" required>
+      <label class="login-label" for="login-password">Password</label>
+      <input class="login-input" id="login-password" name="password" type="password" autocomplete="current-password" required>
+      <p class="login-error" id="login-error" role="alert" hidden>That username or password isn't right. Try again.</p>
+      <button class="btn btn-lime login-submit" type="submit">Log in</button>
+    </form>
+  </section>
+  <div class="shell" id="app-shell" hidden>
+    <header>
+      <a class="brand" href="#home" data-view="home" aria-label="Stride home"><span class="brand-mark">↗</span> stride</a>
+      <nav aria-label="Main navigation">
+        <a href="#home" data-view="home" class="active" aria-current="page">Home</a>
+        <a href="#collection" data-view="collection">Collection</a>
+        <a href="#running" data-view="running">Running</a>
+      </nav>
+      <div class="top-right"><span class="welcome-label" id="welcome-label" hidden>Welcome Manoj</span><button class="logout-button" id="logout-button" type="button">Log out</button></div>
+    </header>
+    <main>
+      <section id="home-view" data-view-panel="home">
+      <div class="intro-row">
+        <div><div class="eyebrow" id="current-date">Monday, 16 November 2026</div><h1>Your daily shoe edit.</h1><p class="intro-sub">A little forecast. A better pair. Make every step count.</p></div>
+      </div>
+      <section class="planner" id="location-flow" aria-labelledby="planner-title">
+        <div class="planner-heading">
+          <div><div class="eyebrow">YOUR DAY, YOUR ROUTE</div><h2 id="planner-title">Where are you heading?</h2><p>Choose a place, check the forecast, then find a pair that fits your commute.</p></div>
+          <span class="step-count">STEP 1 OF 2</span>
+        </div>
+        <div class="planner-grid">
+          <div class="location-panel">
+            <label class="step-label" for="location-input">01 · Search and select a location</label>
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <input class="location-search" id="location-input" type="search" placeholder="Search a city or location" autocomplete="off" aria-autocomplete="list" aria-controls="location-results">
+              <div class="location-results" id="location-results" role="listbox" aria-label="Location suggestions" hidden></div>
+            </div>
+            <div class="selected-location" id="selected-location" hidden>
+              <span class="selected-location-icon" aria-hidden="true">⌖</span>
+              <span><strong id="selected-location-name"></strong><small id="selected-location-region"></small></span>
+            </div>
+            <p class="planner-status" id="location-status" aria-live="polite">Search for a city, then select a result to get its current forecast.</p>
+          </div>
+          <article class="forecast-panel" aria-label="Today's weather">
+            <div class="forecast-top"><span>TODAY'S WEATHER</span><span class="forecast-state" id="forecast-state">WAITING FOR LOCATION</span></div>
+            <div class="forecast-main"><div class="forecast-temp" id="weather-temp">--°C</div><div class="forecast-icon" id="weather-icon" aria-hidden="true">⛅</div></div>
+            <div class="forecast-condition" id="weather-condition">Select a location to see its local weather</div>
+            <div class="forecast-place" id="weather-place">Your selected location will appear here</div>
+            <div class="forecast-humidity" id="weather-humidity">💧 Humidity --%</div>
+          </article>
+        </div>
+        <div class="selection-steps">
+          <div class="selection-step" id="commute-step" hidden>
+            <label for="commute-select">02 · How are you commuting?</label>
+            <select class="planner-select" id="commute-select">
+              <option value="">Choose your commute</option>
+              <option value="Bike">Bike</option><option value="Cycle">Cycle</option><option value="Car">Car</option>
+            </select>
+          </div>
+        </div>
+        <p class="planner-ready" id="planner-ready" aria-live="polite">Choose a location to see current weather. Commute options appear when the forecast loads.</p>
+      </section>
+
+      <section id="today" class="top-grid" aria-label="Today's recommendation and conditions" hidden>
+        <article class="feature" id="feature-card">
+          <div class="feature-copy">
+            <div class="eyebrow">✦ &nbsp; YOUR PICK FOR TODAY</div>
+            <h2 id="recommendation-title">Finding your perfect pair…</h2>
+            <p id="recommendation-copy">A considered pick for the conditions and terrain you choose.</p>
+            <div class="feature-tags" id="recommendation-tags"></div>
+            <div class="feature-actions">
+              <button class="btn btn-lime" id="feature-details">Explore this pair &nbsp; ↗</button>
+              <button class="btn btn-ghost" id="shuffle-button">↻ &nbsp; Another pick</button>
+            </div>
+            <div class="recommendation-credit" id="recommendation-credit"></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="collection" aria-labelledby="home-recommendations-title" hidden>
+        <div class="section-heading">
+          <div><div class="eyebrow">PICKED FOR YOUR PLANS</div><h2 id="home-recommendations-title">Find your footing.</h2><p id="collection-subtitle">Shoes matched to your weather and commute.</p></div>
+        </div>
+        <div class="collection-meta"><span id="result-count"><strong>0 pairs</strong> match your choices</span><span id="selection-summary"></span></div>
+        <div class="shoe-grid" id="shoe-grid" aria-live="polite"></div>
+      </section>
+      </section>
+
+      <section id="collection-view" data-view-panel="collection" hidden aria-labelledby="collection-title">
+        <div class="intro-row">
+          <div><div class="eyebrow">THE FULL EDIT</div><h1 id="collection-title">Every shoe, every option.</h1><p class="intro-sub">Browse all 40 models, explore listed colourways, and see clear placeholders where licensed images are unavailable.</p></div>
+        </div>
+        <div class="collection-toolbar">
+          <div class="collection-tabs" role="tablist" aria-label="Collection browsing options">
+            <button class="filter-btn selected" type="button" role="tab" aria-selected="true" data-collection-tab="all">All shoes</button>
+            <button class="filter-btn" type="button" role="tab" aria-selected="false" data-collection-tab="brands">Brands</button>
+          </div>
+          <label class="collection-search-label" for="collection-search">Find a shoe or brand</label>
+          <input class="location-search collection-search" id="collection-search" type="search" placeholder="Search brand or model" autocomplete="off">
+          <button class="filter-btn image-admin-toggle" id="image-admin-toggle" type="button" aria-expanded="false" aria-controls="image-admin-panel">Image management</button>
+        </div>
+        <section id="brand-browser" aria-labelledby="brand-browser-title" hidden>
+          <div class="section-heading">
+            <div><div class="eyebrow">BROWSE BY BRAND</div><h2 id="brand-browser-title">Choose a brand.</h2><p>Each brand shows the number of models in the collection.</p></div>
+          </div>
+          <div class="brand-grid" id="brand-grid"></div>
+        </section>
+        <section id="collection-results" aria-label="Collection shoes">
+          <div class="collection-meta">
+            <div class="collection-meta-start"><button class="text-link" id="all-brands-button" type="button" hidden>← All shoes</button><span id="collection-active-filter">All brands</span></div>
+            <span id="collection-count"><strong>0 pairs</strong> in the collection</span>
+          </div>
+          <div class="shoe-grid" id="collection-grid" aria-live="polite"></div>
+        </section>
+        <section class="image-admin-panel" id="image-admin-panel" hidden aria-labelledby="image-admin-title">
+          <div class="section-heading">
+            <div><div class="eyebrow">AUTHORIZED PRODUCT IMAGES</div><h2 id="image-admin-title">Image management.</h2><p>Only permission-verified product images are published to the catalog.</p></div>
+          </div>
+          <p class="image-admin-notice">Wikimedia Commons discovery runs automatically for exact model and colour matches. Candidates stay hidden until an administrator confirms the image identity and reuse details. No image upload is required.</p>
+          <div class="image-admin-controls">
+            <label for="image-admin-token">Server admin token</label>
+            <input id="image-admin-token" class="location-search" type="password" autocomplete="off" placeholder="Configured in the server environment">
+            <button class="btn btn-lime" id="image-admin-connect" type="button">Connect and load report</button>
+          </div>
+          <button class="filter-btn" id="image-admin-discover-missing" type="button" disabled>Retry discovery for missing galleries</button>
+          <p class="image-admin-status" id="image-admin-status" role="status" aria-live="polite">Checking image service…</p>
+          <div class="image-admin-summary" id="image-admin-summary" aria-live="polite"></div>
+          <div class="image-admin-providers" id="image-admin-providers"></div>
+          <div class="image-admin-grid" id="image-admin-grid"></div>
+          <section class="image-admin-candidates" id="image-admin-candidates" aria-label="Image candidates awaiting review" hidden></section>
+        </section>
+      </section>
+
+      <section id="running-view" data-view-panel="running" hidden aria-labelledby="running-title">
+        <div class="intro-row">
+          <div><div class="eyebrow">YOUR RUN, YOUR ROUTE</div><h1 id="running-title">Find your running shoe.</h1><p class="intro-sub">Live local weather, distance, and running style shape your recommendations.</p></div>
+        </div>
+        <section class="planner running-planner" aria-labelledby="running-planner-title">
+          <div class="planner-heading">
+            <div><div class="eyebrow">RUNNING SHOE FINDER</div><h2 id="running-planner-title">Set up your next run.</h2><p>Choose your location and distance, then select a running type.</p></div>
+            <span class="step-count">STEP 1 OF 3</span>
+          </div>
+          <div class="planner-grid">
+            <div class="location-panel">
+              <label class="step-label" for="running-location-input">01 · Search and select a location</label>
+              <div class="search-wrap">
+                <span class="search-icon" aria-hidden="true">⌕</span>
+                <input class="location-search" id="running-location-input" type="search" placeholder="Search a city or location" autocomplete="off" aria-autocomplete="list" aria-controls="running-location-results">
+                <div class="location-results" id="running-location-results" role="listbox" aria-label="Running location suggestions" hidden></div>
+              </div>
+              <div class="selected-location" id="running-selected-location" hidden>
+                <span class="selected-location-icon" aria-hidden="true">⌖</span>
+                <span><strong id="running-location-name"></strong><small id="running-location-region"></small></span>
+              </div>
+              <p class="planner-status" id="running-location-status" aria-live="polite">Search for a city to get its current running conditions.</p>
+            </div>
+            <article class="forecast-panel" aria-label="Running weather">
+              <div class="forecast-top"><span>RUNNING WEATHER</span><span class="forecast-state" id="running-forecast-state">WAITING FOR LOCATION</span></div>
+              <div class="forecast-main"><div class="forecast-temp" id="running-weather-temp">--°C</div><div class="forecast-icon" id="running-weather-icon" aria-hidden="true">⛅</div></div>
+              <div class="forecast-condition" id="running-weather-condition">Select a location to see its local weather</div>
+              <div class="forecast-place" id="running-weather-place">Your selected location will appear here</div>
+            </article>
+          </div>
+          <div class="running-options">
+            <div class="selection-step">
+              <label for="running-distance">02 · Intended distance</label>
+              <div class="distance-control"><input id="running-distance" type="range" min="1" max="42" step="1" value="5" aria-label="Running distance in kilometres"><output id="running-distance-output" for="running-distance">Select a distance</output></div>
+              <small class="control-hint">Choose 1–42 km</small>
+            </div>
+            <div class="selection-step">
+              <label for="running-type">03 · Running type</label>
+              <select class="planner-select" id="running-type" disabled>
+                <option value="">Choose your running type</option>
+                <option>Daily Running</option><option>Short Distance Running</option><option>Long Distance Running</option>
+                <option>Marathon Training</option><option>Trail Running</option><option>Sprint Training</option><option>Treadmill Running</option>
+              </select>
+              <small class="control-hint" id="running-type-hint">Choose a location and distance first.</small>
+            </div>
+          </div>
+          <p class="planner-ready" id="running-ready" aria-live="polite">Select a location and distance to choose a running type.</p>
+        </section>
+        <div class="section-heading">
+          <div><div class="eyebrow">RUNNING SHOE MATCHES</div><h2 id="running-results-title">Your recommendations</h2><p id="running-results-copy">Choose your running conditions to see matching shoes.</p></div>
+        </div>
+        <div class="shoe-grid" id="running-shoe-grid" aria-live="polite"></div>
+      </section>
+    </main>
+    <footer><span>stride · Step into your kind of day.</span><span>Weather powered by Open-Meteo</span></footer>
+  </div>
+  <div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal"><div class="modal-top"><span class="eyebrow">THE DETAILS</span><button class="close-modal" id="close-modal" aria-label="Close details">×</button></div><div id="modal-content"></div></div>
+  </div>
+  <script>
+    const shoes = [
+      { id:"cloudrunner", brand:"On", name:"Cloudrunner 2", description:"A supportive everyday road runner with a soft landing and confident stride.", weather:["Sunny","Cloudy","Cold"], terrain:["Road","Pavement"], pros:["Plush, stable cushioning","Confident grip on city streets","Comfortable for everyday miles"], cons:["Less breathable on very hot days","Not designed for technical trails"], rating:"All-day comfort", images:[] },
+      { id:"pegasus", brand:"Nike", name:"Pegasus 41", description:"A versatile road companion that brings a responsive feel to daily runs.", weather:["Sunny","Cloudy","Hot","Cold"], terrain:["Road","Pavement"], pros:["Responsive ride for daily runs","Lightweight and versatile","Breathable upper"], cons:["Road-focused traction","Fit may feel snug for wide feet"], rating:"Responsive ride", images:[] },
+      { id:"speedgoat", brand:"HOKA", name:"Speedgoat 6", description:"A grippy trail favourite made for uneven paths and changing mountain weather.", weather:["Rainy","Cloudy","Cold"], terrain:["Trail","Muddy","Grass"], pros:["Excellent traction on loose ground","Cushioned for longer trail days","Protective toe bumper"], cons:["Chunkier feel on pavement","Can run warm in summer"], rating:"Trail confidence", images:[] },
+      { id:"peg-trail", brand:"Nike", name:"Pegasus Trail 5", description:"A road-to-trail hybrid for mixed surfaces and unpredictable showers.", weather:["Rainy","Cloudy","Sunny"], terrain:["Trail","Road","Grass"], pros:["Easy transition between surfaces","Grippy outsole for light trails","Comfortable, familiar fit"], cons:["Not ideal for deep mud","Less stable on technical terrain"], rating:"Mixed-terrain ready", images:[] },
+      { id:"terrex", brand:"adidas", name:"Terrex Agravic 3", description:"A nimble trail shoe with dependable grip for damp woodland paths.", weather:["Rainy","Cold","Cloudy"], terrain:["Trail","Muddy","Grass"], pros:["Secure grip on soft trails","Light, agile feel","Protective for rocky paths"], cons:["Firm feel on long road runs","Mud can collect in the lugs"], rating:"All-weather grip", images:[] },
+      { id:"ghost", brand:"Brooks", name:"Ghost 16", description:"A smooth, neutral road shoe that keeps easy miles feeling effortless.", weather:["Sunny","Cloudy","Cold"], terrain:["Road","Pavement"], pros:["Smooth, balanced cushioning","Dependable everyday comfort","Durable road outsole"], cons:["Not waterproof in heavy rain","Less lively than speed-focused shoes"], rating:"Smooth and steady", images:[] },
+      { id:"challenger", brand:"HOKA", name:"Challenger 7", description:"A cushioned, adaptable pick for park paths, grass and roads in one outing.", weather:["Sunny","Cloudy","Rainy"], terrain:["Trail","Road","Grass"], pros:["Cushioned across mixed terrain","Good for park loops","Comfortable for long outings"], cons:["Lugs are less suited to deep mud","Bulky for fast road sessions"], rating:"Park-path comfort", images:[] },
+      { id:"vomero", brand:"Nike", name:"Vomero 18", description:"A soft, protective road shoe for relaxed miles and long days on your feet.", weather:["Cold","Cloudy","Sunny"], terrain:["Road","Pavement"], pros:["Generous, soft cushioning","Comfortable for long easy runs","Plush step-in feel"], cons:["Heavier than a tempo shoe","Road outsole only"], rating:"Plush cushioning", images:[] }
+    ];
+    const commuteOptions = ["Bike","Cycle","Car"];
+    const commuteProfiles = {
+      Bike:{ terrains:["Road","Pavement"] },
+      Cycle:{ terrains:["Road","Pavement"] },
+      Car:{ terrains:["Road","Pavement"] }
+    };
+    const commuteFit = {
+      cloudrunner:{ Bike:"Stable cushioning and dependable city grip", Cycle:"Everyday road comfort for short rides", Car:"Plush comfort from the driveway to the destination" },
+      pegasus:{ Bike:"Breathable upper and road grip for short, dry-weather rides", Cycle:"Lightweight, breathable feel for pedal commutes", Car:"Versatile road comfort for everyday plans" },
+      speedgoat:{ Bike:"Protective build and confident grip for wet walk-ups", Car:"Cushioned traction for paths beyond the car park" },
+      "peg-trail":{ Bike:"Grippy mixed-surface tread for changing conditions", Cycle:"Road-to-trail versatility for varied routes", Car:"Easy comfort from streets to park paths" },
+      terrex:{ Bike:"Secure fit and trail grip for damp walk-ups", Car:"Tough traction for paths and muddy stops" },
+      ghost:{ Cycle:"Smooth, breathable road miles on the way there", Car:"Reliable cushioning for all-day wear" },
+      challenger:{ Bike:"Adaptable grip for road and park-path arrivals", Cycle:"Cushioned mixed-surface comfort", Car:"Versatile cushioning from pavement to park" },
+      vomero:{ Cycle:"Soft comfort for relaxed, dry-weather rides", Car:"Plush cushioning for long days on your feet" }
+    };
+    const state = { selectedLocation:null, forecast:null, selectedWeather:null, commute:null, recommendation:null };
+    const weatherIcons = { Sunny:"☀️", Rainy:"🌧️", Cloudy:"☁️", Hot:"🌤️", Cold:"❄️" };
+
+    function conditionFor(code, temperature) {
+      if (temperature >= 28) return "Hot";
+      if (temperature <= 8) return "Cold";
+      if (code === 0 || code === 1) return "Sunny";
+      if (code === 2 || code === 3 || (code >= 45 && code <= 48)) return "Cloudy";
+      if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)) return "Rainy";
+      return "Cloudy";
+    }
+    function describeCode(code) {
+      if (code === 0) return "Clear sky";
+      if (code === 1) return "Mostly clear";
+      if (code === 2) return "Partly cloudy";
+      if (code === 3) return "Overcast";
+      if (code >= 45 && code <= 48) return "Foggy";
+      if (code >= 51 && code <= 57) return "Drizzle";
+      if (code >= 61 && code <= 67) return "Rain";
+      if (code >= 71 && code <= 77) return "Snow";
+      if (code >= 80 && code <= 82) return "Rain showers";
+      if (code >= 95) return "Thunderstorms";
+      return "Current conditions";
+    }
+    function rankShoes(weather, commute) {
+      if (!weather || !commute || !commuteProfiles[commute]) return [];
+      return shoes
+        .filter((shoe) => shoe.weather.includes(weather) && commuteFit[shoe.id] && commuteFit[shoe.id][commute])
+        .map((shoe) => ({
+          shoe,
+          score: shoe.terrain.filter((terrain) => commuteProfiles[commute].terrains.includes(terrain)).length
+        }))
+        .sort((a,b) => b.score - a.score || a.shoe.name.localeCompare(b.shoe.name))
+        .map((item) => item.shoe);
+    }
+    function renderRecommendation() {
+      const ranked = rankShoes(state.selectedWeather, state.commute);
+      const title = document.getElementById("recommendation-title");
+      const detailsButton = document.getElementById("feature-details");
+      if (!ranked.length) {
+        state.recommendation = null;
+        document.getElementById("feature-card").style.removeProperty("--feature-photo");
+        title.textContent = "No exact match yet";
+        document.getElementById("recommendation-copy").textContent = "Try another weather or commute choice to find a suitable pair.";
+        document.getElementById("recommendation-tags").innerHTML = `<span>${state.selectedWeather}</span><span>${state.commute}</span>`;
+        detailsButton.disabled = true;
+        detailsButton.onclick = null;
+        return;
+      }
+      state.recommendation = ranked[0];
+      const shoe = state.recommendation;
+      title.textContent = shoe.name;
+      document.getElementById("recommendation-copy").textContent =
+        `${shoe.description} Picked for ${state.selectedWeather.toLowerCase()} weather and your ${state.commute.toLowerCase()} commute.`;
+      document.getElementById("recommendation-tags").innerHTML =
+        `<span>${shoe.brand}</span><span>${state.selectedWeather}</span><span>${state.commute}</span>`;
+      document.getElementById("feature-card").style.setProperty("--feature-photo", `url("${shoe.images[0]}")`);
+      detailsButton.disabled = false;
+      detailsButton.onclick = () => openDetails(shoe.id);
+      document.getElementById("shuffle-button").hidden = true;
+    }
+    function renderCollection() {
+      const filtered = rankShoes(state.selectedWeather, state.commute);
+      const grid = document.getElementById("shoe-grid");
+      document.getElementById("result-count").innerHTML = `<strong>${filtered.length} ${filtered.length === 1 ? "pair" : "pairs"}</strong> match your choices`;
+      document.getElementById("selection-summary").textContent = `${state.selectedWeather} · ${state.commute}`;
+      if (!filtered.length) {
+        grid.innerHTML = `<div class="empty-state">No exact shoe match for this combination yet. Try another weather or commute choice.</div>`;
+        return;
+      }
+      grid.innerHTML = filtered.map((shoe) => `
+        <article class="shoe-card">
+          <div class="shoe-photo">
+            <img src="${shoe.images[0]}" alt="${shoe.brand} ${shoe.name}, view 1" loading="lazy" data-shoe="${shoe.id}" data-index="0">
+            <button class="gallery-arrow prev" data-gallery="prev" data-shoe="${shoe.id}" aria-label="Previous view of ${shoe.name}">‹</button>
+            <button class="gallery-arrow next" data-gallery="next" data-shoe="${shoe.id}" aria-label="Next view of ${shoe.name}">›</button>
+            <span class="photo-count" data-count="${shoe.id}">01 / ${String(shoe.images.length).padStart(2,"0")}</span>
+          </div>
+          <div class="shoe-content">
+            <div class="shoe-brandline"><span>${shoe.brand}</span><span class="size-tag">UK 8</span></div>
+            <h3 class="shoe-name">${shoe.name}</h3>
+            <p class="shoe-desc">${shoe.description}</p>
+            <div class="shoe-tags">${shoe.weather.map((tag) => `<span>${tag}</span>`).join("")}${shoe.terrain.map((tag) => `<span>${tag}</span>`).join("")}</div>
+            <div class="card-highlights">
+              <div class="highlight"><strong>Why it works</strong><span>${shoe.pros.slice(0,2).join(" · ")}</span></div>
+              <div class="highlight"><strong>Trade-off</strong><span>${shoe.cons[0]}</span></div>
+            </div>
+            <div class="commute-fit"><strong>${state.commute} fit</strong> · ${commuteFit[shoe.id][state.commute]}</div>
+            <div class="card-bottom"><span class="comfort">✦ &nbsp;${shoe.rating}</span><button class="details-btn" data-details="${shoe.id}">Details ↗</button></div>
+          </div>
+        </article>`).join("");
+      grid.querySelectorAll("[data-gallery]").forEach((button) => button.addEventListener("click", () => {
+        const shoe = shoes.find((item) => item.id === button.dataset.shoe);
+        const image = grid.querySelector(`img[data-shoe="${shoe.id}"]`);
+        let index = Number(image.dataset.index);
+        index = (index + (button.dataset.gallery === "next" ? 1 : shoe.images.length - 1)) % shoe.images.length;
+        image.dataset.index = String(index);
+        image.src = shoe.images[index];
+        image.alt = `${shoe.brand} ${shoe.name}, view ${index + 1}`;
+        grid.querySelector(`[data-count="${shoe.id}"]`).textContent = `${String(index + 1).padStart(2,"0")} / ${String(shoe.images.length).padStart(2,"0")}`;
+      }));
+      grid.querySelectorAll("[data-details]").forEach((button) => button.addEventListener("click", () => openDetails(button.dataset.details)));
+    }
+    function openDetails(id) {
+      const shoe = shoes.find((item) => item.id === id);
+      document.getElementById("modal-content").innerHTML = `<div class="modal-body">
+        <img class="modal-image" src="${shoe.images[1]}" alt="${shoe.brand} ${shoe.name} alternate view">
+        <div><div class="eyebrow">${shoe.brand}</div><h2 class="modal-shoe-title" id="modal-title">${shoe.name}</h2><p class="modal-description">${shoe.description}</p>
+          <div class="detail-label">Made for</div><div class="shoe-tags">${shoe.weather.map((tag) => `<span>${weatherIcons[tag]} ${tag}</span>`).join("")}${shoe.terrain.map((tag) => `<span>${tag}</span>`).join("")}</div>
+          <div class="detail-label">${state.commute} practicality</div><p class="modal-description">${commuteFit[shoe.id][state.commute]}</p>
+          <div class="detail-label">The good stuff</div><ul class="detail-list">${shoe.pros.map((item) => `<li>${item}</li>`).join("")}</ul>
+          <div class="detail-label">Worth knowing</div><ul class="detail-list">${shoe.cons.map((item) => `<li>${item}</li>`).join("")}</ul>
+        </div></div>`;
+      document.getElementById("modal-backdrop").classList.add("open");
+      document.getElementById("close-modal").focus();
+    }
+    function updateWeatherCard(temp, code, place) {
+      const conditionName = conditionFor(code, temp);
+      state.selectedWeather = conditionName;
+      document.getElementById("weather-temp").textContent = `${Math.round(temp)}°C`;
+      document.getElementById("weather-condition").textContent = `${describeCode(code)} · ${conditionName}`;
+      document.getElementById("weather-icon").textContent = weatherIcons[conditionName] || "⛅";
+      document.getElementById("weather-place").textContent = place;
+      document.getElementById("weather-humidity").textContent = `💧 Humidity ${Math.round(state.forecast.humidity)}%`;
+      document.getElementById("forecast-state").textContent = "LIVE FORECAST";
+      document.getElementById("commute-step").hidden = false;
+    }
+    function locationLabel(location) {
+      return [location.name, location.admin1, location.country].filter(Boolean).join(", ");
+    }
+    function updateRecommendationVisibility() {
+      const ready = Boolean(state.forecast && state.selectedWeather && state.commute);
+      document.getElementById("today").hidden = !ready;
+      document.getElementById("collection").hidden = !ready;
+      const stepCount = document.querySelector(".step-count");
+      stepCount.textContent = ready ? "ALL SET" : state.forecast ? "STEP 2 OF 2" : "STEP 1 OF 2";
+      const status = document.getElementById("planner-ready");
+      status.classList.toggle("ready", ready);
+      if (ready) {
+        renderRecommendation();
+        renderCollection();
+        status.textContent = `Showing shoes for ${state.selectedWeather.toLowerCase()} weather and your ${state.commute.toLowerCase()} commute.`;
+      } else if (!state.selectedLocation) {
+        status.textContent = "Choose a location to see its current weather; commute options appear after the forecast loads.";
+      } else if (!state.forecast) {
+        status.textContent = "Choose a location and wait for its current forecast.";
+      } else {
+        status.textContent = `Current weather: ${state.selectedWeather}. Choose Bike, Cycle, or Car to see matching shoes.`;
+      }
+    }
+    async function loadWeather(location) {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
+        const data = await response.json();
+        if (!state.selectedLocation || state.selectedLocation.id !== location.id) return;
+        state.forecast = {
+          temperature:data.current.temperature_2m,
+          humidity:data.current.relative_humidity_2m,
+          code:data.current.weather_code
+        };
+        updateWeatherCard(state.forecast.temperature, state.forecast.code, locationLabel(location));
+        document.getElementById("location-status").textContent = "Live forecast loaded. Choose a commute to see matching shoe recommendations.";
+        updateRecommendationVisibility();
+      } catch (error) {
+        if (!state.selectedLocation || state.selectedLocation.id !== location.id) return;
+        document.getElementById("forecast-state").textContent = "WEATHER UNAVAILABLE";
+        document.getElementById("weather-condition").textContent = "Couldn't load the current forecast.";
+        document.getElementById("weather-humidity").textContent = "💧 Humidity unavailable";
+        document.getElementById("location-status").textContent = "Weather lookup failed. Check your connection and select the location again.";
+        document.getElementById("commute-step").hidden = true;
+        updateRecommendationVisibility();
+      }
+    }
+    function selectLocation(location) {
+      state.selectedLocation = location;
+      state.forecast = null;
+      state.selectedWeather = null;
+      state.commute = null;
+      state.recommendation = null;
+      document.getElementById("location-input").value = locationLabel(location);
+      document.getElementById("location-results").hidden = true;
+      document.getElementById("selected-location").hidden = false;
+      document.getElementById("selected-location-name").textContent = location.name;
+      document.getElementById("selected-location-region").textContent = [location.admin1, location.country].filter(Boolean).join(" · ");
+      document.getElementById("weather-temp").textContent = "--°C";
+      document.getElementById("weather-icon").textContent = "⛅";
+      document.getElementById("weather-condition").textContent = "Loading current conditions…";
+      document.getElementById("weather-place").textContent = locationLabel(location);
+      document.getElementById("weather-humidity").textContent = "💧 Humidity --%";
+      document.getElementById("forecast-state").textContent = "FETCHING FORECAST";
+      document.getElementById("commute-select").value = "";
+      document.getElementById("commute-step").hidden = true;
+      document.getElementById("location-status").textContent = "Getting the latest weather for this location…";
+      updateRecommendationVisibility();
+      loadWeather(location);
+    }
+    let locationSearchTimer = null;
+    let locationSearchController = null;
+    async function searchLocations(query) {
+      if (locationSearchController) locationSearchController.abort();
+      locationSearchController = new AbortController();
+      document.getElementById("location-status").textContent = "Searching locations…";
+      try {
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=7&language=en&format=json`;
+        const response = await fetch(url, { signal:locationSearchController.signal });
+        if (!response.ok) throw new Error(`Location search returned ${response.status}`);
+        const data = await response.json();
+        const list = document.getElementById("location-results");
+        list.replaceChildren();
+        if (!data.results || !data.results.length) {
+          list.hidden = true;
+          document.getElementById("location-status").textContent = "No matching locations found. Try a nearby city or a different spelling.";
+          return;
+        }
+        data.results.forEach((result) => {
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "location-option";
+          option.setAttribute("role", "option");
+          option.textContent = result.name;
+          const subline = document.createElement("small");
+          subline.textContent = [result.admin1, result.country].filter(Boolean).join(" · ");
+          option.appendChild(subline);
+          option.addEventListener("click", () => selectLocation(result));
+          list.appendChild(option);
+        });
+        list.hidden = false;
+        document.getElementById("location-status").textContent = `${data.results.length} locations found. Select one to view its weather.`;
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        document.getElementById("location-results").hidden = true;
+        document.getElementById("location-status").textContent = "Location search failed. Check your connection and try again.";
+      }
+    }
+    function clearSelectedLocation() {
+      state.selectedLocation = null;
+      state.forecast = null;
+      state.selectedWeather = null;
+      state.commute = null;
+      state.recommendation = null;
+      document.getElementById("selected-location").hidden = true;
+      document.getElementById("weather-temp").textContent = "--°C";
+      document.getElementById("weather-icon").textContent = "⛅";
+      document.getElementById("weather-condition").textContent = "Select a location to see its local weather";
+      document.getElementById("weather-place").textContent = "Your selected location will appear here";
+      document.getElementById("weather-humidity").textContent = "💧 Humidity --%";
+      document.getElementById("forecast-state").textContent = "WAITING FOR LOCATION";
+      document.getElementById("commute-select").value = "";
+      document.getElementById("commute-step").hidden = true;
+      updateRecommendationVisibility();
+    }
+    document.getElementById("location-input").addEventListener("input", (event) => {
+      const input = event.currentTarget;
+      const query = input.value.trim();
+      if (state.selectedLocation && query !== locationLabel(state.selectedLocation)) {
+        clearSelectedLocation();
+        document.getElementById("location-status").textContent = "Select a new location to refresh its forecast.";
+      }
+      clearTimeout(locationSearchTimer);
+      if (locationSearchController) locationSearchController.abort();
+      document.getElementById("location-results").hidden = true;
+      document.getElementById("location-results").replaceChildren();
+      if (query.length < 2) {
+        document.getElementById("location-results").hidden = true;
+        if (!state.selectedLocation) document.getElementById("location-status").textContent = "Enter at least two characters to search.";
+        return;
+      }
+      locationSearchTimer = setTimeout(() => searchLocations(query), 300);
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".search-wrap")) document.getElementById("location-results").hidden = true;
+    });
+    document.getElementById("commute-select").addEventListener("change", (event) => {
+      state.commute = commuteOptions.includes(event.currentTarget.value) ? event.currentTarget.value : null;
+      updateRecommendationVisibility();
+    });
+    document.getElementById("close-modal").addEventListener("click", () => document.getElementById("modal-backdrop").classList.remove("open"));
+    document.getElementById("modal-backdrop").addEventListener("click", (event) => {
+      if (event.target.id === "modal-backdrop") event.currentTarget.classList.remove("open");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") document.getElementById("modal-backdrop").classList.remove("open");
+    });
+    const dateNow = new Date();
+    document.getElementById("current-date").textContent = new Intl.DateTimeFormat(undefined,{weekday:"long",day:"numeric",month:"long"}).format(dateNow);
+    updateRecommendationVisibility();
+  </script>
+  <script src="app.js" defer></script>
+</body>
+</html>

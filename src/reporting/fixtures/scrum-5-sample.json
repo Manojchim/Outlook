@@ -1,0 +1,806 @@
+{
+  "projectName": "SCRUM / Stride Shoe Planner",
+  "storyKey": "SCRUM-5",
+  "storyTitle": "Dummy User stories — Intelligent Weather and Activity-Based Shoe Recommendation Management",
+  "storyUrl": "https://chimeratechnologies-team-j7fyto3u.atlassian.net/browse/SCRUM-5",
+  "environment": "Local AUT http://127.0.0.1:4173",
+  "testCycleKey": "SCRUM-R1",
+  "dummyCycleKey": "SCRUM-R2",
+  "executionDate": "2026-11-23",
+  "reportGeneratedAt": null,
+  "overallStatus": "PASS WITH ISSUES",
+  "recommendation": "PASS WITH ISSUES – Core SCRUM-5 regression (SCRUM-T28–T53) passed; controlled dummy FAIL (SCRUM-T54 / SCRUM-E27) and Bug SCRUM-8 exist only for QA workflow validation and are not product defects.",
+  "metrics": {
+    "totalTestCases": 27,
+    "executed": 27,
+    "passed": 26,
+    "failed": 1,
+    "blocked": 0,
+    "notExecuted": 0,
+    "bugsCreated": 1,
+    "screenshotsUploaded": 27
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "description": "Authentication and Session Management",
+      "testCaseKeys": [
+        "SCRUM-T28",
+        "SCRUM-T29",
+        "SCRUM-T30",
+        "SCRUM-T31",
+        "SCRUM-T32",
+        "SCRUM-T33"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-02",
+      "description": "Shoe Catalogue Management and Data Integrity",
+      "testCaseKeys": [
+        "SCRUM-T34",
+        "SCRUM-T35",
+        "SCRUM-T36",
+        "SCRUM-T37"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-03",
+      "description": "Location and Weather Integration",
+      "testCaseKeys": [
+        "SCRUM-T38",
+        "SCRUM-T39",
+        "SCRUM-T40"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-04",
+      "description": "Daily Commute-Based Shoe Recommendations",
+      "testCaseKeys": [
+        "SCRUM-T41",
+        "SCRUM-T42",
+        "SCRUM-T43"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-05",
+      "description": "Running-Based Shoe Recommendations",
+      "testCaseKeys": [
+        "SCRUM-T44",
+        "SCRUM-T45",
+        "SCRUM-T46"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-06",
+      "description": "Brand, Colour Variant and Shoe Image Validation",
+      "testCaseKeys": [
+        "SCRUM-T47",
+        "SCRUM-T48"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-07",
+      "description": "Dynamic Filtering and Recommendation Consistency",
+      "testCaseKeys": [
+        "SCRUM-T49",
+        "SCRUM-T50"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-08",
+      "description": "Security and Input Validation",
+      "testCaseKeys": [
+        "SCRUM-T51",
+        "SCRUM-T52"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "AC-09/12",
+      "description": "E2E Workflow / Integration",
+      "testCaseKeys": [
+        "SCRUM-T53"
+      ],
+      "status": "PASS",
+      "relatedBugs": []
+    },
+    {
+      "id": "QA-WF",
+      "description": "Dummy failure-workflow validation (not a product AC)",
+      "testCaseKeys": [
+        "SCRUM-T54"
+      ],
+      "status": "FAIL",
+      "relatedBugs": [
+        "SCRUM-8"
+      ]
+    }
+  ],
+  "testCases": [
+    {
+      "key": "SCRUM-T28",
+      "name": "Valid login grants access to protected functionality",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "Login screen displayed",
+      "steps": "Enter admin/admin; submit",
+      "testData": "admin/admin",
+      "expectedResult": "App shell visible",
+      "actualResult": "App shell visible after valid admin/admin login",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T28-login-success.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T29",
+      "name": "Invalid credentials are rejected",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "Login screen displayed",
+      "steps": "Enter invalid credentials; submit",
+      "testData": "wrong/wrong",
+      "expectedResult": "Error alert; shell hidden",
+      "actualResult": "Error alert shown; app shell hidden",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T29-invalid-login.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T54",
+      "name": "DUMMY - Negative Validation - Failure Workflow Automation Test",
+      "priority": "Low",
+      "regression": false,
+      "preconditions": "AUT accessible; Playwright working",
+      "steps": "Login; assert intentional incorrect expected text",
+      "testData": "admin/admin; DUMMY_FAILURE_EXPECTED_MESSAGE",
+      "expectedResult": "DUMMY_FAILURE_EXPECTED_MESSAGE should appear",
+      "actualResult": "Application displayed its normal authenticated application shell",
+      "status": "Fail",
+      "executionId": "SCRUM-E27",
+      "bugId": "SCRUM-8",
+      "screenshotFilename": "SCRUM-T54-failure.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T30",
+      "name": "SCRUM-5 Mandatory login fields validated",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T30-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T31",
+      "name": "SCRUM-5 Password field masked",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T31-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T32",
+      "name": "SCRUM-5 Logout terminates session",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T32-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T33",
+      "name": "SCRUM-5 Unauth gate",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T33-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T34",
+      "name": "SCRUM-5 Catalogue 40 models",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T34-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T35",
+      "name": "SCRUM-5 Shoe detail",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T35-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T36",
+      "name": "SCRUM-5 Search nike",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T36-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T37",
+      "name": "SCRUM-5 Missing product info",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T37-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T38",
+      "name": "SCRUM-5 Weather london",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T38-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T39",
+      "name": "SCRUM-5 Invalid location",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T39-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T40",
+      "name": "SCRUM-5 Weather failure",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T40-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T41",
+      "name": "SCRUM-5 Commute bike",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T41-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T42",
+      "name": "SCRUM-5 Commute refresh",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T42-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T43",
+      "name": "SCRUM-5 Commute results",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T43-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T44",
+      "name": "SCRUM-5 Running recs",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T44-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T45",
+      "name": "SCRUM-5 Distance bounds",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T45-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T46",
+      "name": "SCRUM-5 Running refresh",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T46-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T47",
+      "name": "SCRUM-5 Brand filter",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T47-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T48",
+      "name": "SCRUM-5 Image placeholder",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T48-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T49",
+      "name": "SCRUM-5 Filter persist",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T49-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T50",
+      "name": "SCRUM-5 Detail consistency",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T50-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T51",
+      "name": "SCRUM-5 XSS SQLi",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T51-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T52",
+      "name": "SCRUM-5 Secrets admin",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T52-evidence.png",
+      "attachmentVerified": "Yes"
+    },
+    {
+      "key": "SCRUM-T53",
+      "name": "SCRUM-5 E2E workflow",
+      "priority": "High",
+      "regression": true,
+      "preconditions": "As per Zephyr",
+      "steps": "As per Zephyr",
+      "testData": "As per matrix",
+      "expectedResult": "Pass criteria met",
+      "actualResult": "Pass (SCRUM-R1)",
+      "status": "Pass",
+      "executionId": "SCRUM-R1",
+      "bugId": "",
+      "screenshotFilename": "SCRUM-T53-evidence.png",
+      "attachmentVerified": "Yes"
+    }
+  ],
+  "bugs": [
+    {
+      "key": "SCRUM-8",
+      "summary": "[QA AUTOMATION TEST] Dummy Failure Workflow - Intentional Assertion Mismatch",
+      "description": "DUMMY / TEST DATA — intentional assertion mismatch for QA workflow validation. Not a genuine product defect.",
+      "priority": "Lowest",
+      "status": "To Do",
+      "relatedStory": "SCRUM-5",
+      "relatedTestCase": "SCRUM-T54",
+      "executionId": "SCRUM-E27",
+      "createdDate": "2026-11-23",
+      "url": "https://chimeratechnologies-team-j7fyto3u.atlassian.net/browse/SCRUM-8"
+    }
+  ],
+  "evidence": [
+    {
+      "testCaseKey": "SCRUM-T28",
+      "screenshotFilename": "SCRUM-T28-login-success.png",
+      "localPath": "%TEMP%\\stride-qa-scrum-5-evidence\\TC-28\\SCRUM-T28-login-success.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T54",
+      "screenshotFilename": "SCRUM-T54-failure.png",
+      "localPath": "%TEMP%\\stride-dummy-failure-evidence\\SCRUM-T54-failure.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-E27"
+    },
+    {
+      "testCaseKey": "SCRUM-T29",
+      "screenshotFilename": "SCRUM-T29-invalid-login.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T29\\\\SCRUM-T29-invalid-login.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T30",
+      "screenshotFilename": "SCRUM-T30-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T30\\\\SCRUM-T30-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T31",
+      "screenshotFilename": "SCRUM-T31-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T31\\\\SCRUM-T31-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T32",
+      "screenshotFilename": "SCRUM-T32-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T32\\\\SCRUM-T32-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T33",
+      "screenshotFilename": "SCRUM-T33-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T33\\\\SCRUM-T33-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T34",
+      "screenshotFilename": "SCRUM-T34-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T34\\\\SCRUM-T34-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T35",
+      "screenshotFilename": "SCRUM-T35-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T35\\\\SCRUM-T35-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T36",
+      "screenshotFilename": "SCRUM-T36-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T36\\\\SCRUM-T36-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T37",
+      "screenshotFilename": "SCRUM-T37-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T37\\\\SCRUM-T37-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T38",
+      "screenshotFilename": "SCRUM-T38-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T38\\\\SCRUM-T38-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T39",
+      "screenshotFilename": "SCRUM-T39-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T39\\\\SCRUM-T39-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T40",
+      "screenshotFilename": "SCRUM-T40-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T40\\\\SCRUM-T40-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T41",
+      "screenshotFilename": "SCRUM-T41-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T41\\\\SCRUM-T41-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T42",
+      "screenshotFilename": "SCRUM-T42-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T42\\\\SCRUM-T42-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T43",
+      "screenshotFilename": "SCRUM-T43-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T43\\\\SCRUM-T43-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T44",
+      "screenshotFilename": "SCRUM-T44-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T44\\\\SCRUM-T44-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T45",
+      "screenshotFilename": "SCRUM-T45-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T45\\\\SCRUM-T45-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T46",
+      "screenshotFilename": "SCRUM-T46-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T46\\\\SCRUM-T46-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T47",
+      "screenshotFilename": "SCRUM-T47-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T47\\\\SCRUM-T47-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T48",
+      "screenshotFilename": "SCRUM-T48-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T48\\\\SCRUM-T48-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T49",
+      "screenshotFilename": "SCRUM-T49-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T49\\\\SCRUM-T49-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T50",
+      "screenshotFilename": "SCRUM-T50-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T50\\\\SCRUM-T50-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T51",
+      "screenshotFilename": "SCRUM-T51-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T51\\\\SCRUM-T51-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T52",
+      "screenshotFilename": "SCRUM-T52-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T52\\\\SCRUM-T52-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    },
+    {
+      "testCaseKey": "SCRUM-T53",
+      "screenshotFilename": "SCRUM-T53-evidence.png",
+      "localPath": "%TEMP%\\\\stride-qa-scrum-5-evidence\\\\SCRUM-T53\\\\SCRUM-T53-evidence.png",
+      "zephyrAttachmentStatus": "Uploaded",
+      "attachmentVerification": "Verified",
+      "executionReference": "SCRUM-R1"
+    }
+  ],
+  "outstandingIssues": [
+    "SCRUM-T54 intentional FAIL (dummy workflow validation only).",
+    "Bug SCRUM-8 is labeled qa-automation-dummy — not a product defect.",
+    "SCRUM-T30–T53 evidence summarized; full 26 PASS cases executed under SCRUM-R1 (see Zephyr)."
+  ],
+  "note": "Phase 1 sample fixture. Metrics include 26 PASS regression cases (T28–T53) plus 1 intentional dummy FAIL (T54). Detailed rows for T28, T29, T54 are expanded; remaining PASS cases are covered in metrics and AC tables."
+}

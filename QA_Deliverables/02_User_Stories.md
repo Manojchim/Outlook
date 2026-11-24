@@ -1,0 +1,17 @@
+# 02 User Stories
+
+## User Stories
+
+| User Story ID | Module | User Story Title | User Story Description | Preconditions | Acceptance Criteria ID | Acceptance Criteria | Implementation Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| US-001 | Authentication | Secure application access | As a user, I want the app to require valid credentials, so that protected content is restricted. | App is accessible | AC-001 | Valid credentials reveal the application | Implemented |
+| US-002 | Authentication | Reject invalid credentials | As a user, I want invalid credentials rejected, so that unauthorized access is prevented. | App is accessible | AC-002 | Invalid credentials show an inline error | Implemented |
+| US-003 | Authentication | Logout and session cleanup | As a signed-in user, I want logout to clear protected state, so that my session cannot continue. | User is signed in | AC-003 | Logout hides the app and resets password input | Partial |
+| US-004 | Home | Location search and forecast | As a commuter, I want to select a location and see live weather, so that I can plan footwear. | Weather providers are reachable | AC-004 | Valid location loads live weather | Implemented |
+| US-005 | Home | Commute recommendations | As a commuter, I want Bike/Cycle/Car filtering, so that my shoe choice fits the route. | A forecast is loaded | AC-005 | Each commute produces weather and terrain matches | Implemented |
+| US-006 | Collection | Browse the 40-model catalogue | As a shopper, I want to browse 40 unique shoes with UK size 8, so that I can compare options. | User is authenticated | AC-006 | Collection displays 40 unique shoe cards | Implemented |
+| US-007 | Brands | Browse by brand | As a shopper, I want brand counts and brand filtering, so that I can navigate the catalogue. | Collection is open | AC-007 | 15 brands are listed and brand filters show matching models | Implemented |
+| US-008 | Shoe Details | View shoe details and variants | As a shopper, I want details, variants, pros and cons, so that I can assess a shoe. | A shoe card is visible | AC-008 | Details show description, fit, weather, terrain and variants | Implemented |
+| US-009 | Running | Configure a running recommendation | As a runner, I want distance and running type filtering, so that shoes match my run. | Location weather and distance are selected | AC-009 | Running range 1-42 km and seven running types are available | Implemented |
+| US-010 | Image Management | Protect image publication | As an administrator, I want unverified images excluded and access protected, so that licensing is respected. | Server admin token is configured | AC-010 | Public API returns only verified images; protected API requires a bearer token | Implemented |
+| US-011 | General | Handle external-service failures | As a user, I want clear failures and loading states, so that I understand unavailable integrations. | App is accessible | AC-011 | Geocoding/weather failures show actionable status text | Implemented |

@@ -1,0 +1,9 @@
+# 08 Defect Report
+
+## Defects
+
+| Defect ID | Related Test Case ID | User Story ID | Module | Defect Title | Environment | Severity | Priority | Preconditions | Steps to Reproduce | Expected Result | Actual Result | Evidence | Status | Remarks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BUG-001 | TC-004 | US-003 | Authentication | Client-side session storage allows authentication bypass | Windows 11 / Chromium / Local | Critical | P1 | Application is open; browser has no valid session | 1. Open the application. 2. Set sessionStorage stride-demo-authenticated=true. 3. Reload. | Login must remain required and protected UI/APIs must remain unavailable. | 2026-11-19 retest failed: application shell, Welcome Manoj and navigation became visible without credentials. | tests/qa/end-to-end.spec.js; targeted and full-suite Playwright retest; QA_Deliverables/Bugs/BUG-001.md | Retest | Reproducible authentication bypass. No fix was applied. |
+| BUG-002 | TC-024 | US-011 | General / Automation | test-1.spec.js points to another workspace and has no assertions | Windows 11 / Chromium / Local | Medium | P3 | Existing suite | Run test-1.spec.js | Test should use baseURL and assert behavior | 2026-11-19 retest passed Playwright despite stale file URL and no assertions. | tests/test-1.spec.js; standalone and full-suite retests | Retest | Automation maintenance defect remains unresolved. |
+| BUG-003 | US-002 | US-002 | Authentication | Credentials are hardcoded in frontend | Windows 11 / Chromium / Local | High | P2 | Application source | Inspect app.js or bypass login | Credentials must be server-controlled and secrets not shipped to browser | 2026-11-19 source retest found admin/admin comparison unchanged. | app.js login handler source review | Retest | Demo credential remains in frontend. No fix was applied. |

@@ -1,0 +1,38 @@
+---
+description: Generate PDF/Excel QA reports and email after completed User Story execution
+alwaysApply: true
+---
+
+# QA Report Generation and Email
+
+Complement `.cursor/rules/jira-qa-failure-bug.mdc`. Do not conflict with failure-Bug attachment/Parent/Sprint rules.
+
+After a Jira User Story QA execution is complete (Zephyr updates, Bugs for confirmed failures, screenshots uploaded and verified):
+
+## Always
+
+1. Collect final execution results, Bugs, acceptance-criteria coverage, and evidence metadata.
+2. Generate a **PDF** and **Excel** report via `src/reporting/report-generator.service.js` (CLI: `npm run qa:report:generate` or `node scripts/qa-report-send.js --generate-only --story <KEY>`).
+3. Include actual metrics, Bugs, screenshot filenames, and Zephyr attachment verification — never fabricate results.
+4. Save outputs under `reports/QA/<STORY_KEY>/` and write/update `email-delivery.json` when sending.
+5. Keep execution status separate from email status. Email failure must not mark an otherwise completed execution as FAIL.
+6. Never log SMTP passwords, tokens, or other secrets. Log only `set`/`missing` for credential env vars.
+
+## Email (SMTP preferred in CI; Outlook optional locally)
+
+1. Default CI provider: **SMTP** via GitHub Secrets (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) and Variable `TEST_EMAIL_RECIPIENT`.
+2. Encryption: port `465` → TLS/SSL; port `587` → STARTTLS. Optional `SMTP_SECURE` override.
+3. Phase 1 recipient: only `TEST_EMAIL_RECIPIENT` (`rmanoj@chimeratechnologies.com`).
+4. Before the first send: run `npm run qa:report:validate-smtp` (connection + auth only; **no email sent**).
+5. Do **not** auto-send until the user has confirmed the Phase 1 validation email (and both attachments) were received. Keep `QA_REPORT_AUTO_SEND=false` until then.
+6. For Phase 1 send (only after user confirmation): `npm run qa:report:send-validation` with PDF + Excel attached.
+7. Prevent duplicate submissions using delivery-log idempotency `{storyKey}:{cycleKey}:{reportDate}`.
+8. Preserve generated reports on email failure for retry (disk + CI artifacts).
+
+## Phase 2 (only after user confirmation)
+
+When the user confirms validation receipt and enables auto-send:
+
+1. After each completed User Story, generate PDF + Excel automatically.
+2. If `QA_REPORT_AUTO_SEND=true` and recipients are configured, send both attachments.
+3. Record delivery log; preserve reports on email failure for retry.

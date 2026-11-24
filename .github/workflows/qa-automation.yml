@@ -1,0 +1,153 @@
+name: QA Automation
+
+# Runs Playwright e2e tests and maps SMTP / recipient configuration from
+# GitHub Secrets and Variables. Automatic email delivery stays DISABLED.
+on:
+  workflow_dispatch:
+    inputs:
+      smtp_validate_only:
+        description: "Only validate SMTP configuration and authentication (no tests, no email send)"
+        type: boolean
+        default: true
+      run_tests:
+        description: "Run Playwright e2e tests"
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+      - feature/**
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-automation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Never enable auto-send from CI until Phase 1 receipt is confirmed.
+  QA_REPORT_AUTO_SEND: "false"
+  QA_EMAIL_PROVIDER: smtp
+  QA_REPORT_FORMATS: pdf,xlsx
+
+jobs:
+  validate-smtp:
+    name: Validate SMTP (no send)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: SMTP configuration and authentication check
+        env:
+          # Prefer repository Secrets; fall back to Variables if Secrets are unset.
+          # SMTP_PASSWORD should be a Secret (not a Variable). Never echo values.
+          SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || vars.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
+          TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
+          QA_EMAIL_PROVIDER: smtp
+          QA_REPORT_AUTO_SEND: "false"
+        run: |
+          set -euo pipefail
+          # Presence check without printing secret values
+          missing=0
+          for name in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL TEST_EMAIL_RECIPIENT; do
+            eval "val=\${$name-}"
+            if [ -z "$val" ]; then
+              echo "::error::$name is missing (secret/variable not available in this context)"
+              missing=1
+            else
+              echo "$name=set"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          node scripts/qa-report-send.js --validate-smtp
+
+  playwright-e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    # Skip heavy tests when the dispatch input is validate-only.
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      inputs.run_tests == true ||
+      inputs.smtp_validate_only != true
+    env:
+      SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || vars.SMTP_PASSWORD }}
+      SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
+      TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
+      QA_EMAIL_PROVIDER: smtp
+      QA_REPORT_AUTO_SEND: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Confirm email env present (no values)
+        run: |
+          set -euo pipefail
+          for name in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL TEST_EMAIL_RECIPIENT; do
+            eval "val=\${$name-}"
+            if [ -z "$val" ]; then
+              echo "::warning::$name is missing"
+            else
+              echo "$name=set"
+            fi
+          done
+          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND (must remain false until Phase 1 confirmation)"
+
+      - name: Run Playwright tests
+        id: tests
+        run: npm run test:e2e
+        continue-on-error: false
+
+      - name: Generate PDF and Excel QA reports
+        id: reports
+        if: always() && steps.tests.outcome != 'skipped'
+        run: node --env-file-if-exists=.env scripts/qa-report-send.js --generate-only --story SCRUM-5
+        continue-on-error: true
+
+      # Email delivery is intentionally NOT invoked here.
+      # After SMTP validation succeeds and you confirm, a future change may add
+      # --send-validation behind an explicit workflow input with continue-on-error.
+
+      - name: Upload QA reports (preserved even if email later fails)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports-${{ github.run_id }}
+          path: |
+            reports/QA/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14

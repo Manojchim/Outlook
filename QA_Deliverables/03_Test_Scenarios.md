@@ -1,0 +1,36 @@
+# 03 Test Scenarios
+
+## Test Scenarios
+
+| Test Scenario ID | User Story ID | Acceptance Criteria ID | Module | Sub Module | Scenario | Test Type | Test Design Technique |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TS-001 | US-001 | AC-001 | Authentication | Login | Valid login | Positive | Equivalence Partitioning |
+| TS-002 | US-002 | AC-002 | Authentication | Login | Invalid login | Negative | Error Guessing |
+| TS-003 | US-002 | AC-002 | Authentication | Login | SQL/XSS payload | Security | Error Guessing |
+| TS-004 | US-003 | AC-003 | Authentication | Session | Session bypass | Security | State Transition |
+| TS-005 | US-003 | AC-003 | Authentication | Logout | Logout cleanup | Positive | State Transition |
+| TS-006 | US-003 | AC-003 | Authentication | Password | Password masking | UI | Exploratory |
+| TS-007 | US-001 | AC-001 | Authentication | Required fields | Mandatory fields | Negative | BVA |
+| TS-008 | US-004 | AC-004 | Home | Location search | No location matches | Negative | Error Guessing |
+| TS-009 | US-004 | AC-004 | Home | Location search | Geocoding failure | Integration | Error Guessing |
+| TS-010 | US-011 | AC-011 | Home | Weather API | Weather timeout | Edge Case | Error Guessing |
+| TS-011 | US-005 | AC-005 | Home | Commute | Commute choices | Functional | Decision Table |
+| TS-012 | US-006 | AC-006 | Collection | Catalogue | Catalogue size | Functional | Equivalence Partitioning |
+| TS-013 | US-006 | AC-006 | Collection | Search | Model search | Functional | Equivalence Partitioning |
+| TS-014 | US-007 | AC-007 | Brands | Brand directory | Brand count | Functional | Equivalence Partitioning |
+| TS-015 | US-008 | AC-008 | Shoe Details | Details modal | Details | Functional | Exploratory |
+| TS-016 | US-009 | AC-009 | Running | Distance | Distance BVA | BVA | BVA |
+| TS-017 | US-009 | AC-009 | Running | Running types | Running combinations | Functional | Decision Table |
+| TS-018 | US-009 | AC-009 | Running | No matches | No matching shoes | Negative | Decision Table |
+| TS-019 | US-010 | AC-010 | Image Management | Authorization | Missing/wrong token | Security | Error Guessing |
+| TS-020 | US-010 | AC-010 | Image Management | Public API | Pending images hidden | Security | Boundary Analysis |
+| TS-021 | US-010 | AC-010 | Image Management | Static exposure | Source files hidden | Security | Error Guessing |
+| TS-022 | US-010 | AC-010 | Image Management | Candidate verification | Verify image | Negative | Decision Table |
+| TS-023 | US-011 | AC-011 | General | Responsive UI | Mobile viewport | UI | Exploratory |
+| TS-024 | US-011 | AC-011 | General | Console/network | Browser console and network | Regression | Exploratory |
+| TS-025 | US-011 | AC-011 | General | Database persistence | Catalog sync | Data Validation | Exploratory |
+| TS-026 | US-010 | AC-010 | Image Management | Broken URLs | Broken image placeholder | Edge Case | Error Guessing |
+| TS-027 | US-010 | AC-010 | Image Management | External provider | Provider timeout | Integration | Error Guessing |
+| TS-028 | US-005 | AC-005 | Home | Weather/rankings | Rapid commute changes | Edge Case | State Transition |
+| TS-029 | US-009 | AC-009 | Running | Refresh | Refresh during loading | Edge Case | State Transition |
+| TS-030 | US-011 | AC-011 | General | Browser compatibility | Cross-browser run | Regression | Exploratory |
