@@ -49,43 +49,65 @@ Both detailed reports are attached:
 
 Please refer to the attached reports for complete test execution details and defect information.
 
-Note: Microsoft Graph accepting sendMail confirms submission to Outlook, not independent mailbox receipt confirmation.
+Note: SMTP acceptance confirms server submission, not independent mailbox receipt confirmation.
 
 Regards,
 QA Automation Team
 `;
 }
 
+/**
+ * Production QA report subject:
+ * QA Automation Report - {JIRA_STORY_KEY} - {EXECUTION_DATE}
+ */
 function buildValidationSubject(data) {
-  if (data.reportingSource === "LIVE_ZEPHYR") {
-    const cycleName = data.testCycleName || data.testCycleKey || data.storyTitle;
-    return `QA Automation Execution Report – ${data.projectKey || "SCRUM"} – ${cycleName} – ${data.executionDate}`;
-  }
-  return `QA Automation Execution Report – ${data.projectName || data.storyKey} – ${data.executionDate}`;
+  const storyKey = data.storyKey || data.projectKey || "SCRUM";
+  const executionDate = data.executionDate || "UNKNOWN";
+  return `QA Automation Report - ${storyKey} - ${executionDate}`;
 }
 
 function buildValidationBody(data) {
   const m = data.metrics || {};
-  return `Hi,
+  const pdfName =
+    data.attachmentFilenames?.pdf ||
+    data.files?.pdfBaseName ||
+    "QA Report (PDF)";
+  const xlsxName =
+    data.attachmentFilenames?.xlsx ||
+    data.files?.xlsxBaseName ||
+    "QA Report (Excel)";
+  const executedAt =
+    data.executionDateTime ||
+    data.executedAt ||
+    data.executionDate ||
+    "Not available";
 
-The automated QA test execution has been completed.
+  return `Hello,
 
-Please find the attached execution reports in PDF and Excel formats.
+The automated QA execution report is ready.
 
-Execution Summary:
-- Reporting Source: ${data.reportingSourceLabel || data.reportingSource || "UNKNOWN"}
-- Project: ${data.projectName || data.projectKey || ""}
-- Test Cycle: ${data.testCycleName || data.testCycleKey || data.storyKey}
-- Execution Date: ${data.executionDate}
-- Total Test Cases: ${m.totalTestCases}
-- Executed: ${m.executed}
-- Passed: ${m.passed}
-- Failed: ${m.failed}
-- Blocked: ${m.blocked}
-- Skipped: ${m.skipped ?? 0}
-- Not Executed: ${m.notExecuted}
-- In Progress: ${m.inProgress ?? 0}
-- Execution Status: ${data.overallStatus}
+Jira Story
+- Key: ${data.storyKey || "Not available"}
+- Title: ${data.storyTitle || "Not available"}
+
+Zephyr
+- Project: ${data.projectKey || data.projectName || "Not available"}
+- Test Cycle: ${data.testCycleName || data.testCycleKey || "Not available"}
+
+Execution
+- Date / time: ${executedAt}
+- Total test cases: ${m.totalTestCases ?? "n/a"}
+- Passed: ${m.passed ?? "n/a"}
+- Failed: ${m.failed ?? "n/a"}
+- Blocked: ${m.blocked ?? "n/a"}
+- Not executed: ${m.notExecuted ?? "n/a"}
+- Overall result: ${data.overallStatus || "UNKNOWN"}
+
+Attachments
+1. PDF: ${pdfName}
+2. Excel: ${xlsxName}
+
+SMTP acceptance means the mail server accepted the message. Inbox receipt must be confirmed separately.
 
 Regards,
 QA Automation Framework

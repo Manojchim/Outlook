@@ -2,8 +2,10 @@ name: QA Automation
 
 # Actions target: Manojchim/Outlook only (main).
 # Maps SMTP / Zephyr credentials from GitHub Secrets and Variables.
-# Automatic email delivery stays DISABLED (QA_REPORT_AUTO_SEND=false).
-# Live email requires BOTH send_email=true AND confirm_send_email=true.
+# Automatic email: only for workflow_dispatch with run_tests=true when
+# QA_REPORT_AUTO_SEND=true AND Playwright + explicit Zephyr cycle succeed.
+# Push/pull_request never auto-send by default.
+# Manual live email still requires BOTH send_email=true AND confirm_send_email=true.
 # SMTP auth validation never authorizes delivery.
 on:
   workflow_dispatch:
@@ -61,7 +63,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QA_REPORT_AUTO_SEND: "false"
+  # Reads repository variable; remains false until explicitly enabled after review.
+  QA_REPORT_AUTO_SEND: ${{ vars.QA_REPORT_AUTO_SEND || 'false' }}
   QA_EMAIL_PROVIDER: smtp
   QA_REPORT_FORMATS: pdf,xlsx
   AUT_BASE_URL: "http://127.0.0.1:4173"
@@ -95,13 +98,19 @@ jobs:
           node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
 
       - name: Audit dispatch inputs and enforce email confirmation guards
-        env:
-          QA_REPORT_AUTO_SEND: "false"
         run: |
           set -euo pipefail
+          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            echo "Non-dispatch event; email send inputs not applicable."
-            echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
+            echo "Non-dispatch event; manual email send inputs not applicable."
+            node scripts/qa-email-dispatch-guard.js \
+              --send_email=false \
+              --confirm_send_email=false \
+              --send_test_email=false \
+              --send_validation_email=false \
+              --smtp_validate_only=false \
+              --run_tests=true \
+              --QA_REPORT_AUTO_SEND="$QA_REPORT_AUTO_SEND"
             exit 0
           fi
           node scripts/qa-email-dispatch-guard.js \
@@ -111,7 +120,7 @@ jobs:
             --send_validation_email=${{ inputs.send_validation_email }} \
             --smtp_validate_only=${{ inputs.smtp_validate_only }} \
             --run_tests=${{ inputs.run_tests }} \
-            --QA_REPORT_AUTO_SEND=false
+            --QA_REPORT_AUTO_SEND="$QA_REPORT_AUTO_SEND"
 
   validate-smtp:
     name: Validate SMTP (no send by default)
@@ -162,7 +171,6 @@ jobs:
           SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
           TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
           QA_EMAIL_PROVIDER: smtp
-          QA_REPORT_AUTO_SEND: "false"
         run: |
           set -euo pipefail
           missing=0
@@ -195,7 +203,6 @@ jobs:
           SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
           TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
           QA_EMAIL_PROVIDER: smtp
-          QA_REPORT_AUTO_SEND: "false"
           CONFIRM_SEND_EMAIL: "true"
         run: |
           set -euo pipefail
@@ -216,7 +223,6 @@ jobs:
           SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
           TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
           QA_EMAIL_PROVIDER: smtp
-          QA_REPORT_AUTO_SEND: "false"
           QA_REPORT_FORMATS: pdf,xlsx
           REPORT_DATA_SOURCE: sample
           CONFIRM_SEND_EMAIL: "true"
@@ -270,7 +276,6 @@ jobs:
       SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
       TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
       QA_EMAIL_PROVIDER: smtp
-      QA_REPORT_AUTO_SEND: "false"
       QA_REPORT_FORMATS: pdf,xlsx
     steps:
       - name: Checkout
@@ -338,8 +343,8 @@ jobs:
             node scripts/verify-report-consistency.js --source sample --story SCRUM-5
             echo "QA_REPORT_STATUS=validated_sample" >> "$GITHUB_ENV"
           fi
-          echo "Reports generated and validated. QA_REPORT_AUTO_SEND remains false."
-          find reports/QA -type f -name '*.pdf' -o -name '*.xlsx' | sort || true
+          echo "Reports generated and validated. Manual auto-send is handled by auto-report-email when enabled."
+          find reports/QA -type f \( -name '*.pdf' -o -name '*.xlsx' \) | sort || true
 
       - name: Fail closed if report validation did not succeed
         if: always() && steps.reports.outcome != 'success'
@@ -415,7 +420,6 @@ jobs:
       SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
       TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
       QA_EMAIL_PROVIDER: smtp
-      QA_REPORT_AUTO_SEND: "false"
       REPORT_DATA_SOURCE: sample
       HOST: "127.0.0.1"
       PORT: "4173"
@@ -490,11 +494,188 @@ jobs:
           REPORT_DATA_SOURCE: sample
         run: node scripts/write-qa-job-summary.js
 
+  auto-report-email:
+    name: Automatic report email (dispatch + run_tests only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [dispatch-audit, playwright-e2e]
+    # Explicit policy: workflow_dispatch + run_tests only. Never push/pull_request.
+    if: >
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.run_tests == true &&
+      inputs.smtp_validate_only != true &&
+      needs.dispatch-audit.result == 'success' &&
+      needs.playwright-e2e.result == 'success' &&
+      vars.QA_REPORT_AUTO_SEND == 'true'
+    env:
+      REPORT_DATA_SOURCE: zephyr
+      ZEPHYR_PROJECT_KEY: ${{ inputs.project_key }}
+      ZEPHYR_TEST_CYCLE_KEY: ${{ inputs.test_cycle_key }}
+      ZEPHYR_SCALE_API_TOKEN: ${{ secrets.ZEPHYR_SCALE_API_TOKEN || secrets.ZEPHYR_API_TOKEN }}
+      ZEPHYR_SCALE_API_BASE_URL: ${{ secrets.ZEPHYR_SCALE_API_BASE_URL || vars.ZEPHYR_SCALE_API_BASE_URL }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || vars.SMTP_PASSWORD }}
+      SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
+      TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
+      QA_EMAIL_PROVIDER: smtp
+      QA_REPORT_FORMATS: pdf,xlsx
+      QA_PLAYWRIGHT_OK: "true"
+      QA_REQUIRE_PLAYWRIGHT: "true"
+      QA_RUN_TESTS: "true"
+      JIRA_STORY_KEY: SCRUM-5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert Outlook repository target
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY}" != "Manojchim/Outlook" ]; then
+            echo "::error::QA Actions must run on Manojchim/Outlook. Got ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+          node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore prior delivery log for this run (retry/idempotency)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: qa-email-delivery-${{ github.run_id }}
+          path: reports/QA
+
+      - name: Guard automatic delivery prerequisites
+        id: auto_guard
+        run: |
+          set -euo pipefail
+          echo "event=${{ github.event_name }}"
+          echo "run_tests=${{ inputs.run_tests }}"
+          echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
+          echo "ZEPHYR_PROJECT_KEY set=$([ -n "${ZEPHYR_PROJECT_KEY:-}" ] && echo yes || echo no)"
+          echo "ZEPHYR_TEST_CYCLE_KEY set=$([ -n "${ZEPHYR_TEST_CYCLE_KEY:-}" ] && echo yes || echo no)"
+          if [ "$QA_REPORT_AUTO_SEND" != "true" ]; then
+            echo "::error::Automatic email job started while QA_REPORT_AUTO_SEND is not true."
+            echo "QA_EMAIL_STATUS=SKIPPED_AUTO_SEND_DISABLED" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          if [ -z "${ZEPHYR_PROJECT_KEY:-}" ]; then
+            echo "::error::project_key is required for automatic live reporting. No silent project default."
+            echo "QA_EMAIL_STATUS=SKIPPED_MISSING_PROJECT" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          if [ -z "${ZEPHYR_TEST_CYCLE_KEY:-}" ]; then
+            echo "::error::test_cycle_key is required for automatic live reporting. Silent SCRUM-R3 fallback is disabled."
+            echo "QA_EMAIL_STATUS=SKIPPED_MISSING_CYCLE" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          node -e "
+            const { validateExplicitZephyrCycle, evaluateAutoEmailTriggerPolicy } = require('./src/email/email-send-guard.service');
+            const trigger = evaluateAutoEmailTriggerPolicy({
+              eventName: process.env.GITHUB_EVENT_NAME,
+              runTests: true,
+              autoSend: process.env.QA_REPORT_AUTO_SEND,
+              smtpValidateOnly: false
+            });
+            if (!trigger.allowed) {
+              console.error('::error::' + trigger.errors.join(' '));
+              process.exit(1);
+            }
+            const cycle = validateExplicitZephyrCycle(process.env.ZEPHYR_TEST_CYCLE_KEY);
+            if (!cycle.ok) {
+              console.error('::error::' + cycle.error);
+              process.exit(1);
+            }
+            console.log(JSON.stringify({ trigger: trigger.reason, cycleKey: cycle.cycleKey }));
+          "
+          if [ -z "${ZEPHYR_SCALE_API_TOKEN}" ] || [ -z "${ZEPHYR_SCALE_API_BASE_URL}" ]; then
+            echo "::error::Zephyr API token/base URL missing for automatic email."
+            echo "QA_EMAIL_STATUS=SKIPPED_MISSING_ZEPHYR_CONFIG" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          if [ -z "${TEST_EMAIL_RECIPIENT:-}" ]; then
+            echo "::error::TEST_EMAIL_RECIPIENT is not configured."
+            echo "QA_EMAIL_STATUS=SKIPPED_MISSING_RECIPIENT" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          for name in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL; do
+            eval "val=\${$name-}"
+            if [ -z "$val" ]; then
+              echo "::error::$name is missing"
+              echo "QA_EMAIL_STATUS=SKIPPED_MISSING_SMTP" >> "$GITHUB_ENV"
+              exit 1
+            fi
+            echo "$name=set"
+          done
+          echo "TEST_EMAIL_RECIPIENT=set"
+
+      - name: Generate and validate live Zephyr reports
+        id: reports
+        if: steps.auto_guard.outcome == 'success'
+        run: |
+          set -euo pipefail
+          node scripts/verify-report-consistency.js --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
+          echo "QA_REPORT_STATUS=validated_live" >> "$GITHUB_ENV"
+          find reports/QA -type f \( -name '*.pdf' -o -name '*.xlsx' \) | sort
+
+      - name: Send automatic QA report email
+        id: email
+        if: steps.reports.outcome == 'success'
+        run: |
+          set -euo pipefail
+          node scripts/qa-report-send.js \
+            --auto-send \
+            --require-playwright \
+            --playwright-ok true \
+            --source zephyr \
+            --project "$ZEPHYR_PROJECT_KEY" \
+            --cycle "$ZEPHYR_TEST_CYCLE_KEY" \
+            --story "${JIRA_STORY_KEY:-SCRUM-5}"
+          echo "QA_EMAIL_STATUS=smtp_accepted_or_attempted" >> "$GITHUB_ENV"
+          echo "Automatic email submission attempted at most once for this Actions run (run-scoped idempotency)."
+
+      - name: Upload delivery log for retry/idempotency
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-email-delivery-${{ github.run_id }}
+          path: reports/QA/**/email-delivery.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload automatic QA reports (PDF/Excel only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-auto-reports-${{ github.run_id }}
+          path: |
+            reports/QA/**/*.pdf
+            reports/QA/**/*.xlsx
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Job summary
+        if: always()
+        env:
+          QA_REPORT_STATUS: ${{ env.QA_REPORT_STATUS || 'failed_or_skipped' }}
+          QA_EMAIL_STATUS: ${{ env.QA_EMAIL_STATUS || 'not attempted' }}
+        run: node scripts/write-qa-job-summary.js
+
   workflow-status:
     name: Workflow status gate
     runs-on: ubuntu-latest
     if: always()
-    needs: [dispatch-audit, validate-smtp, zephyr-report, playwright-e2e]
+    needs: [dispatch-audit, validate-smtp, zephyr-report, playwright-e2e, auto-report-email]
     steps:
       - name: Summarize job outcomes
         run: |
@@ -503,12 +684,14 @@ jobs:
           echo "Branch/ref: ${{ github.ref }}"
           echo "SHA: ${{ github.sha }}"
           echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "QA_REPORT_AUTO_SEND=${{ vars.QA_REPORT_AUTO_SEND || 'false' }}"
           echo "dispatch-audit: ${{ needs.dispatch-audit.result }}"
           echo "validate-smtp: ${{ needs.validate-smtp.result }}"
           echo "zephyr-report: ${{ needs.zephyr-report.result }}"
           echo "playwright-e2e: ${{ needs.playwright-e2e.result }}"
+          echo "auto-report-email: ${{ needs.auto-report-email.result }}"
           failed=0
-          for result in "${{ needs.dispatch-audit.result }}" "${{ needs.validate-smtp.result }}" "${{ needs.zephyr-report.result }}" "${{ needs.playwright-e2e.result }}"; do
+          for result in "${{ needs.dispatch-audit.result }}" "${{ needs.validate-smtp.result }}" "${{ needs.zephyr-report.result }}" "${{ needs.playwright-e2e.result }}" "${{ needs.auto-report-email.result }}"; do
             if [ "$result" = "failure" ]; then
               failed=1
             fi

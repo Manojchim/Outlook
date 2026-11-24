@@ -40,6 +40,57 @@ function findSubmissionForRun(logPath, githubRunId) {
 }
 
 /**
+ * Run-scoped duplicate protection for the same Actions run / report identity.
+ * Scope: same githubRunId (job retries / re-attempts that restore this log).
+ * Does NOT claim cross-run protection for unrelated GITHUB_RUN_ID values.
+ */
+function shouldBlockDuplicateSubmission({
+  logPath,
+  githubRunId = null,
+  storyKey,
+  cycleKey,
+  reportDate,
+  forceResend = false
+} = {}) {
+  if (forceResend) {
+    return {
+      block: false,
+      reason: "FORCE_RESEND",
+      existing: null,
+      scope: "none"
+    };
+  }
+  const key = idempotencyKey(storyKey, cycleKey, reportDate, githubRunId);
+  const byKey = findSuccessfulSubmission(logPath, key);
+  if (byKey) {
+    return {
+      block: true,
+      reason: "DUPLICATE_IDEMPOTENCY_KEY",
+      existing: byKey,
+      scope: githubRunId ? "run_and_report" : "report_identity",
+      idempotencyKey: key
+    };
+  }
+  const byRun = findSubmissionForRun(logPath, githubRunId);
+  if (byRun) {
+    return {
+      block: true,
+      reason: "DUPLICATE_GITHUB_RUN",
+      existing: byRun,
+      scope: "github_run",
+      idempotencyKey: key
+    };
+  }
+  return {
+    block: false,
+    reason: "NO_PRIOR_ACCEPTED_SUBMISSION",
+    existing: null,
+    scope: githubRunId ? "github_run" : "report_identity",
+    idempotencyKey: key
+  };
+}
+
+/**
  * Append a delivery attempt. Never stores tokens/secrets.
  * submissionAccepted must be true ONLY when SMTP/Graph sendMail actually succeeded.
  * Auth-only / skipped paths must use submissionAccepted=false and emailStatus SKIPPED_* / AUTH_ONLY.
@@ -102,5 +153,6 @@ module.exports = {
   writeLog,
   findSuccessfulSubmission,
   findSubmissionForRun,
+  shouldBlockDuplicateSubmission,
   appendDeliveryEntry
 };

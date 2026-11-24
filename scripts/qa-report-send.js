@@ -9,7 +9,8 @@
  *   node --env-file-if-exists=.env scripts/qa-report-send.js --auth-only
  *   node --env-file-if-exists=.env scripts/qa-report-send.js --send-validation --story SCRUM-5
  *
- * Auto-send remains disabled until QA_REPORT_AUTO_SEND=true AND Phase 1 receipt is confirmed.
+ * Manual send: --send-validation requires --confirm-send.
+ * Automatic send: workflow-only --auto-send when QA_REPORT_AUTO_SEND=true and GITHUB_ACTIONS=true.
  * Prefer --validate-smtp before any first send. Never log passwords or tokens.
  */
 
@@ -35,14 +36,15 @@ const {
 } = require("../src/email/email-template.service");
 const {
   idempotencyKey,
-  findSuccessfulSubmission,
-  findSubmissionForRun,
+  shouldBlockDuplicateSubmission,
   appendDeliveryEntry
 } = require("../src/email/email-delivery-log.service");
 const {
   asBool,
-  assertPreSendRequirements
+  assertPreSendRequirements,
+  evaluateAutomaticEmailEligibility
 } = require("../src/email/email-send-guard.service");
+const fs = require("node:fs");
 
 function parseArgs(argv) {
   const args = {
@@ -54,9 +56,12 @@ function parseArgs(argv) {
     validateSmtp: false,
     generateOnly: false,
     sendValidation: false,
+    autoSend: false,
     confirmSend: asBool(process.env.CONFIRM_SEND_EMAIL),
     forceDeviceCode: false,
-    forceResend: false
+    forceResend: false,
+    playwrightOk: asBool(process.env.QA_PLAYWRIGHT_OK || "true"),
+    requirePlaywright: asBool(process.env.QA_REQUIRE_PLAYWRIGHT)
   };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
@@ -64,9 +69,12 @@ function parseArgs(argv) {
     else if (a === "--validate-smtp") args.validateSmtp = true;
     else if (a === "--generate-only") args.generateOnly = true;
     else if (a === "--send-validation") args.sendValidation = true;
+    else if (a === "--auto-send") args.autoSend = true;
     else if (a === "--confirm-send") args.confirmSend = true;
     else if (a === "--force-device-code") args.forceDeviceCode = true;
     else if (a === "--force-resend") args.forceResend = true;
+    else if (a === "--require-playwright") args.requirePlaywright = true;
+    else if (a === "--playwright-ok") args.playwrightOk = asBool(argv[++i]);
     else if (a === "--story") args.story = argv[++i];
     else if (a === "--source") args.source = argv[++i];
     else if (a === "--project") args.project = argv[++i];
@@ -83,6 +91,7 @@ function printHelp() {
   --auth-only              Run Microsoft device-code auth only (Outlook provider)
   --send-validation        Generate reports + send Phase 1 validation email
   --confirm-send           Required with --send-validation (explicit dual confirmation)
+  --auto-send              Workflow automatic delivery path (requires QA_REPORT_AUTO_SEND=true + GITHUB_ACTIONS)
   --source sample|zephyr   Report data source (default: sample / REPORT_DATA_SOURCE)
   --project SCRUM          Jira/Zephyr project key for live mode
   --cycle SCRUM-R1         Zephyr test cycle key/ID (required for --source zephyr)
@@ -90,6 +99,14 @@ function printHelp() {
   --force-device-code       Ignore cached token and re-authenticate (Outlook)
   --force-resend           Bypass duplicate-send protection (use carefully)
 `);
+}
+
+function fileReadable(filePath) {
+  try {
+    return Boolean(filePath && fs.existsSync(filePath) && fs.statSync(filePath).size > 0);
+  } catch {
+    return false;
+  }
 }
 
 function printEnvPresence(config) {
@@ -251,17 +268,20 @@ async function main() {
     )
   );
 
-  // Default path: generate only. Auto-send stays off until explicitly enabled + confirmed.
-  if (args.generateOnly || (!args.sendValidation && !config.autoSend)) {
-    if (!args.sendValidation) {
-      console.log(
-        "Email not sent (Phase 1: use --validate-smtp first, then --send-validation --confirm-send after confirmation; QA_REPORT_AUTO_SEND remains false until you confirm receipt)."
-      );
-    }
+  const wantsManualSend = args.sendValidation;
+  const wantsAutoSend = args.autoSend;
+  const manualAuthorized = wantsManualSend && args.confirmSend;
+  const inGitHubActions = asBool(process.env.GITHUB_ACTIONS);
+
+  // Default path: generate only unless manual dual-confirm or workflow auto-send.
+  if (args.generateOnly || (!wantsManualSend && !wantsAutoSend)) {
+    console.log(
+      "Email not sent (use --send-validation --confirm-send for manual delivery, or workflow --auto-send when QA_REPORT_AUTO_SEND=true)."
+    );
     process.exit(0);
   }
 
-  if (args.sendValidation && !args.confirmSend) {
+  if (wantsManualSend && !args.confirmSend) {
     const skipLogPath = path.join(generated.directory, "email-delivery.json");
     appendDeliveryEntry(skipLogPath, {
       idempotencyKey: idempotencyKey(
@@ -297,6 +317,70 @@ async function main() {
     process.exit(1);
   }
 
+  if (wantsAutoSend && !manualAuthorized) {
+    const pdfOk = fileReadable(generated.files?.pdf);
+    const excelOk = fileReadable(generated.files?.xlsx);
+    const autoGate = evaluateAutomaticEmailEligibility({
+      autoSend: config.autoSend,
+      smtpValidateOnly: asBool(process.env.SMTP_VALIDATE_ONLY),
+      workflowAutoSendIntent: true,
+      githubActions: inGitHubActions,
+      playwrightOk: args.playwrightOk,
+      reportValidationOk: Boolean(generated.ok),
+      liveZephyrOk:
+        args.source !== "zephyr" || Boolean(generated.data?.testCycleKey),
+      pdfOk,
+      excelOk,
+      recipientConfigured: Boolean(config.testRecipient || config.recipients[0]),
+      smtpConfigured: Boolean(
+        config.smtpHost &&
+          config.smtpPort &&
+          config.smtpUsername &&
+          config.smtpPassword &&
+          config.smtpFromEmail
+      ),
+      source: args.source,
+      reportOnly: false,
+      eventName: process.env.GITHUB_EVENT_NAME || "workflow_dispatch",
+      runTests: asBool(process.env.QA_RUN_TESTS || "true"),
+      zephyrCycleKey: args.cycle || generated.data?.testCycleKey || null
+    });
+    if (!autoGate.eligible) {
+      const skipLogPath = path.join(generated.directory, "email-delivery.json");
+      appendDeliveryEntry(skipLogPath, {
+        idempotencyKey: idempotencyKey(
+          generated.data.storyKey,
+          generated.data.testCycleKey,
+          generated.data.executionDate,
+          process.env.GITHUB_RUN_ID || null
+        ),
+        executionId: generated.data.testCycleKey,
+        storyKey: generated.data.storyKey,
+        cycleKey: generated.data.testCycleKey,
+        executionDate: generated.data.executionDate,
+        recipient: null,
+        authenticationStatus: "NOT_ATTEMPTED",
+        submissionAccepted: false,
+        mailboxReceiptConfirmed: false,
+        emailStatus: "SKIPPED_AUTO_SEND_BLOCKED",
+        githubRunId: process.env.GITHUB_RUN_ID || null,
+        attachmentFilenames: [],
+        note: autoGate.errors.join(" ")
+      });
+      console.error(
+        JSON.stringify({
+          executionStatus: "COMPLETED",
+          emailStatus: "SKIPPED_AUTO_SEND_BLOCKED",
+          submissionAccepted: false,
+          mailboxReceiptConfirmed: false,
+          reason: autoGate.reason,
+          errors: autoGate.errors
+        })
+      );
+      process.exit(1);
+    }
+  }
+
   // Phase 1 validation send path
   let recipient;
   try {
@@ -317,17 +401,16 @@ async function main() {
 
   const logPath = path.join(generated.directory, "email-delivery.json");
   const githubRunId = process.env.GITHUB_RUN_ID || null;
-  const key = idempotencyKey(
-    generated.data.storyKey,
-    generated.data.testCycleKey,
-    generated.data.executionDate,
-    githubRunId
-  );
-  if (
-    !args.forceResend &&
-    (findSuccessfulSubmission(logPath, key) ||
-      findSubmissionForRun(logPath, githubRunId))
-  ) {
+  const duplicate = shouldBlockDuplicateSubmission({
+    logPath,
+    githubRunId,
+    storyKey: generated.data.storyKey,
+    cycleKey: generated.data.testCycleKey,
+    reportDate: generated.data.executionDate,
+    forceResend: args.forceResend
+  });
+  const key = duplicate.idempotencyKey;
+  if (duplicate.block) {
     appendDeliveryEntry(logPath, {
       idempotencyKey: key,
       executionId: generated.data.testCycleKey,
@@ -341,15 +424,18 @@ async function main() {
       emailStatus: "SKIPPED_DUPLICATE",
       githubRunId,
       attachmentFilenames: [],
-      note: "Duplicate send blocked for this report version / Actions run. No email submitted."
+      note: `Duplicate send blocked (${duplicate.reason}, scope=${duplicate.scope}). Run-scoped only; no email submitted.`
     });
     console.log(
       JSON.stringify({
         executionStatus: "COMPLETED",
         emailStatus: "SKIPPED_DUPLICATE",
         submissionAccepted: false,
+        mailboxReceiptConfirmed: false,
         idempotencyKey: key,
-        note: "A successful submission already exists for this report version or Actions run."
+        duplicateReason: duplicate.reason,
+        duplicateScope: duplicate.scope,
+        note: "A successful submission already exists for this Actions run / report identity. Cross-run protection is not claimed."
       })
     );
     process.exit(0);
@@ -363,7 +449,11 @@ async function main() {
     attachmentPaths,
     reportValidationOk: Boolean(generated.ok),
     liveZephyrOk: args.source !== "zephyr" || Boolean(generated.data?.testCycleKey),
-    source: args.source
+    source: args.source,
+    playwrightOk: args.playwrightOk,
+    requirePlaywright: args.requirePlaywright || wantsAutoSend,
+    pdfOk: fileReadable(generated.files.pdf),
+    excelOk: fileReadable(generated.files.xlsx)
   });
   if (!preSend.ok) {
     console.error(
@@ -377,6 +467,16 @@ async function main() {
     );
     process.exit(1);
   }
+
+  generated.data.attachmentFilenames = {
+    pdf: path.basename(generated.files.pdf || ""),
+    xlsx: path.basename(generated.files.xlsx || "")
+  };
+  generated.data.files = {
+    ...(generated.data.files || {}),
+    pdfBaseName: generated.data.attachmentFilenames.pdf,
+    xlsxBaseName: generated.data.attachmentFilenames.xlsx
+  };
 
   let providerResult;
   try {
