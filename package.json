@@ -6,8 +6,9 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
-    "test:qa-report": "node --test test/qa-report.test.js test/zephyr-report.test.js",
+    "test:qa-report": "node --test test/qa-report.test.js test/zephyr-report.test.js test/github-actions-context.test.js test/evidence-register.test.js",
     "test:zephyr-report": "node --test test/zephyr-report.test.js",
+    "test:unit": "node --test test/qa-report.test.js test/zephyr-report.test.js test/github-actions-context.test.js test/evidence-register.test.js",
     "qa:report:generate": "node --env-file-if-exists=.env scripts/qa-report-send.js --generate-only --source sample --story SCRUM-5",
     "qa:report:generate:zephyr": "node --env-file-if-exists=.env scripts/qa-report-send.js --generate-only --source zephyr",
     "qa:report:validate-smtp": "node --env-file-if-exists=.env scripts/qa-report-send.js --validate-smtp",
