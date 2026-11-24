@@ -6,5 +6,6 @@ module.exports = {
   ...require("./outlook-auth.service"),
   ...require("./outlook.service"),
   ...require("./smtp.service"),
-  ...require("./email-delivery-log.service")
+  ...require("./email-delivery-log.service"),
+  ...require("./email-send-guard.service")
 };

@@ -3,8 +3,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-function idempotencyKey(storyKey, cycleKey, reportDate) {
-  return `${storyKey}:${cycleKey}:${reportDate}`;
+function idempotencyKey(storyKey, cycleKey, reportDate, githubRunId = null) {
+  const base = `${storyKey}:${cycleKey}:${reportDate}`;
+  return githubRunId ? `${base}:run:${githubRunId}` : base;
 }
 
 function readLog(logPath) {
@@ -28,29 +29,67 @@ function findSuccessfulSubmission(logPath, key) {
   );
 }
 
+function findSubmissionForRun(logPath, githubRunId) {
+  if (!githubRunId) return null;
+  const log = readLog(logPath);
+  return (log.entries || []).find(
+    (e) =>
+      String(e.githubRunId || "") === String(githubRunId) &&
+      e.submissionAccepted === true
+  );
+}
+
 /**
  * Append a delivery attempt. Never stores tokens/secrets.
+ * submissionAccepted must be true ONLY when SMTP/Graph sendMail actually succeeded.
+ * Auth-only / skipped paths must use submissionAccepted=false and emailStatus SKIPPED_* / AUTH_ONLY.
  */
 function appendDeliveryEntry(logPath, entry) {
   const log = readLog(logPath);
+  const emailStatus = entry.emailStatus || "UNKNOWN";
+  const isSkipped =
+    String(emailStatus).startsWith("SKIPPED") ||
+    emailStatus === "AUTH_ONLY" ||
+    emailStatus === "NOT_ATTEMPTED";
+  const submissionAccepted = isSkipped
+    ? false
+    : Boolean(entry.submissionAccepted);
+
   const safe = {
     idempotencyKey: entry.idempotencyKey,
     executionId: entry.executionId,
     storyKey: entry.storyKey,
     cycleKey: entry.cycleKey,
     executionDate: entry.executionDate,
-    recipient: entry.recipient,
-    authenticationStatus: entry.authenticationStatus,
+    recipient: entry.recipient || null,
+    authenticationStatus: entry.authenticationStatus || null,
     submittedAt: entry.submittedAt || new Date().toISOString(),
     attachmentFilenames: entry.attachmentFilenames || [],
-    submissionAccepted: Boolean(entry.submissionAccepted),
+    submissionAccepted,
     mailboxReceiptConfirmed: Boolean(entry.mailboxReceiptConfirmed),
-    emailStatus: entry.emailStatus,
+    emailStatus,
     httpStatus: entry.httpStatus ?? null,
+    messageId: entry.messageId || null,
+    githubRunId: entry.githubRunId || null,
     graphErrorCode: entry.graphErrorCode || null,
     graphErrorMessage: entry.graphErrorMessage || null,
     note: entry.note || null
   };
+
+  // Hard safety: never record accepted submission for auth-only/skipped.
+  if (
+    (isSkipped || emailStatus === "AUTH_ONLY") &&
+    safe.submissionAccepted === true
+  ) {
+    safe.submissionAccepted = false;
+    safe.note = [
+      safe.note,
+      "Forced submissionAccepted=false because status is auth-only/skipped."
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   log.entries = log.entries || [];
   log.entries.push(safe);
   writeLog(logPath, log);
@@ -62,5 +101,6 @@ module.exports = {
   readLog,
   writeLog,
   findSuccessfulSubmission,
+  findSubmissionForRun,
   appendDeliveryEntry
 };

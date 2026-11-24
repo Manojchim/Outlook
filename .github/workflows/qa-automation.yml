@@ -3,7 +3,8 @@ name: QA Automation
 # Actions target: Manojchim/Outlook only (main).
 # Maps SMTP / Zephyr credentials from GitHub Secrets and Variables.
 # Automatic email delivery stays DISABLED (QA_REPORT_AUTO_SEND=false).
-# Live Zephyr create/execute/send requires explicit workflow_dispatch inputs + operator approval.
+# Live email requires BOTH send_email=true AND confirm_send_email=true.
+# SMTP auth validation never authorizes delivery.
 on:
   workflow_dispatch:
     inputs:
@@ -23,19 +24,23 @@ on:
         type: string
         default: ""
       smtp_validate_only:
-        description: "Only validate SMTP configuration and authentication (no tests, no email send)"
+        description: "Only validate SMTP configuration and authentication (no tests, no email send). Conflicts with any send_* / confirm_send_email."
         type: boolean
         default: true
+      confirm_send_email:
+        description: "Second confirmation required for ANY email submission (send_email / send_test_email / send_validation_email). Default false."
+        type: boolean
+        default: false
       send_test_email:
-        description: "After SMTP verify succeeds, send ONE smoke-test email (no PDF/Excel)"
+        description: "After SMTP verify succeeds, send ONE smoke-test email (no PDF/Excel). Requires confirm_send_email=true."
         type: boolean
         default: false
       send_validation_email:
-        description: "Send ONE sample-fixture validation email with PDF+Excel (explicit only; default false)"
+        description: "Send ONE sample-fixture validation email with PDF+Excel. Requires confirm_send_email=true."
         type: boolean
         default: false
       send_email:
-        description: "Send LIVE Zephyr PDF+Excel via SMTP after report validation (explicit approval only; default false)."
+        description: "Send LIVE Zephyr PDF+Excel via SMTP after report validation. Requires confirm_send_email=true."
         type: boolean
         default: false
       run_tests:
@@ -63,15 +68,65 @@ env:
   EXPECTED_GITHUB_REPOSITORY: "Manojchim/Outlook"
 
 jobs:
+  dispatch-audit:
+    name: Dispatch audit and email guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Assert Outlook repository target
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY}" != "Manojchim/Outlook" ]; then
+            echo "::error::QA Actions must run on Manojchim/Outlook. Got ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+          node -e "require('./src/github/actions-context').assertOutlookRepository(process.env)"
+
+      - name: Audit dispatch inputs and enforce email confirmation guards
+        env:
+          QA_REPORT_AUTO_SEND: "false"
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "Non-dispatch event; email send inputs not applicable."
+            echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
+            exit 0
+          fi
+          node scripts/qa-email-dispatch-guard.js \
+            --send_email=${{ inputs.send_email }} \
+            --confirm_send_email=${{ inputs.confirm_send_email }} \
+            --send_test_email=${{ inputs.send_test_email }} \
+            --send_validation_email=${{ inputs.send_validation_email }} \
+            --smtp_validate_only=${{ inputs.smtp_validate_only }} \
+            --run_tests=${{ inputs.run_tests }} \
+            --QA_REPORT_AUTO_SEND=false
+
   validate-smtp:
     name: Validate SMTP (no send by default)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: [dispatch-audit]
     if: >
-      github.event_name != 'workflow_dispatch' ||
-      inputs.smtp_validate_only == true ||
-      inputs.send_test_email == true ||
-      inputs.send_validation_email == true
+      always() &&
+      needs.dispatch-audit.result == 'success' &&
+      (
+        github.event_name != 'workflow_dispatch' ||
+        inputs.smtp_validate_only == true ||
+        inputs.send_test_email == true ||
+        inputs.send_validation_email == true
+      )
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -129,7 +184,9 @@ jobs:
         if: >
           github.event_name == 'workflow_dispatch' &&
           inputs.send_test_email == true &&
-          inputs.send_validation_email != true
+          inputs.confirm_send_email == true &&
+          inputs.send_validation_email != true &&
+          inputs.smtp_validate_only != true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
@@ -139,13 +196,18 @@ jobs:
           TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
           QA_EMAIL_PROVIDER: smtp
           QA_REPORT_AUTO_SEND: "false"
+          CONFIRM_SEND_EMAIL: "true"
         run: |
           set -euo pipefail
           echo "Sending one smoke-test email (no attachments). Credentials are not printed."
-          node scripts/smtp-smoke-test.js --send-test
+          node scripts/smtp-smoke-test.js --send-test --confirm-send
 
       - name: Generate sample PDF/Excel and send ONE validation email
-        if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          inputs.send_validation_email == true &&
+          inputs.confirm_send_email == true &&
+          inputs.smtp_validate_only != true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
@@ -157,18 +219,25 @@ jobs:
           QA_REPORT_AUTO_SEND: "false"
           QA_REPORT_FORMATS: pdf,xlsx
           REPORT_DATA_SOURCE: sample
+          CONFIRM_SEND_EMAIL: "true"
         run: |
           set -euo pipefail
           echo "Sample fixture validation email path only. Auto-send remains false."
           node scripts/verify-report-consistency.js --source sample
-          node scripts/qa-report-send.js --send-validation --source sample --story SCRUM-5
+          node scripts/qa-report-send.js --send-validation --confirm-send --source sample --story SCRUM-5
 
       - name: Upload validation reports
-        if: github.event_name == 'workflow_dispatch' && inputs.send_validation_email == true && always()
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          inputs.send_validation_email == true &&
+          inputs.confirm_send_email == true &&
+          always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-validation-reports-${{ github.run_id }}
-          path: reports/QA/**
+          path: |
+            reports/QA/**/*.pdf
+            reports/QA/**/*.xlsx
           if-no-files-found: warn
           retention-days: 14
 
@@ -176,14 +245,18 @@ jobs:
         if: always()
         env:
           QA_REPORT_STATUS: ${{ job.status }}
-          QA_EMAIL_STATUS: not attempted (smtp validate job)
+          QA_EMAIL_STATUS: not attempted (smtp validate job default)
         run: node scripts/write-qa-job-summary.js
 
   zephyr-report:
     name: QA report (sample or live Zephyr)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: github.event_name == 'workflow_dispatch'
+    needs: [dispatch-audit]
+    if: >
+      always() &&
+      needs.dispatch-audit.result == 'success' &&
+      github.event_name == 'workflow_dispatch'
     env:
       REPORT_DATA_SOURCE: ${{ inputs.report_data_source }}
       ZEPHYR_PROJECT_KEY: ${{ inputs.project_key }}
@@ -221,12 +294,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Guardrails (live requires cycle + secrets; email only when explicitly requested)
+      - name: Guardrails (live requires cycle + secrets; dual confirmation for email)
         run: |
           set -euo pipefail
           echo "REPORT_DATA_SOURCE=$REPORT_DATA_SOURCE"
           echo "QA_REPORT_AUTO_SEND=$QA_REPORT_AUTO_SEND"
-          echo "send_email input=${{ inputs.send_email }}"
+          echo "send_email=${{ inputs.send_email }}"
+          echo "confirm_send_email=${{ inputs.confirm_send_email }}"
+          if [ "${{ inputs.send_email }}" = "true" ] && [ "${{ inputs.confirm_send_email }}" != "true" ]; then
+            echo "::error::send_email=true requires confirm_send_email=true. No email will be sent."
+            exit 1
+          fi
           if [ "${{ inputs.send_email }}" = "true" ] && [ "$REPORT_DATA_SOURCE" != "zephyr" ]; then
             echo "::error::send_email=true is only allowed with report_data_source=zephyr (live data)."
             exit 1
@@ -261,7 +339,7 @@ jobs:
             echo "QA_REPORT_STATUS=validated_sample" >> "$GITHUB_ENV"
           fi
           echo "Reports generated and validated. QA_REPORT_AUTO_SEND remains false."
-          find reports/QA -type f -print || true
+          find reports/QA -type f -name '*.pdf' -o -name '*.xlsx' | sort || true
 
       - name: Fail closed if report validation did not succeed
         if: always() && steps.reports.outcome != 'success'
@@ -269,25 +347,44 @@ jobs:
           echo "::error::Report generation/validation failed. Job must not be treated as successful."
           exit 1
 
-      - name: Send LIVE report email (explicit send_email only)
+      - name: Send LIVE report email (dual confirmation required)
         id: email
-        if: ${{ inputs.send_email == true && inputs.report_data_source == 'zephyr' && steps.reports.outcome == 'success' }}
+        if: >
+          inputs.send_email == true &&
+          inputs.confirm_send_email == true &&
+          inputs.smtp_validate_only != true &&
+          inputs.report_data_source == 'zephyr' &&
+          steps.reports.outcome == 'success'
+        env:
+          CONFIRM_SEND_EMAIL: "true"
         run: |
           set -euo pipefail
           if [ -z "${TEST_EMAIL_RECIPIENT:-}" ]; then
             echo "::error::TEST_EMAIL_RECIPIENT is not configured."
             exit 1
           fi
-          node scripts/qa-report-send.js --send-validation --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
+          node scripts/qa-report-send.js --send-validation --confirm-send --source zephyr --project "$ZEPHYR_PROJECT_KEY" --cycle "$ZEPHYR_TEST_CYCLE_KEY"
           echo "QA_EMAIL_STATUS=smtp_accepted_or_attempted" >> "$GITHUB_ENV"
-          echo "Live report email submission attempted. Check Actions log for SMTP acceptance."
+          echo "Live report email submission attempted. Check Actions log for SMTP acceptance vs mailbox receipt."
 
-      - name: Upload QA reports
+      - name: Record skipped live email (send requested without confirmation)
+        if: >
+          inputs.send_email == true &&
+          inputs.confirm_send_email != true &&
+          steps.reports.outcome == 'success'
+        run: |
+          echo "::error::Live email skipped: confirm_send_email was false."
+          echo "QA_EMAIL_STATUS=SKIPPED_CONFIRMATION_REQUIRED" >> "$GITHUB_ENV"
+          exit 1
+
+      - name: Upload QA reports (PDF/Excel only)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-zephyr-reports-${{ github.run_id }}
-          path: reports/QA/**
+          path: |
+            reports/QA/**/*.pdf
+            reports/QA/**/*.xlsx
           if-no-files-found: warn
           retention-days: 14
 
@@ -302,10 +399,14 @@ jobs:
     name: Playwright e2e
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: [dispatch-audit]
     if: >
-      github.event_name != 'workflow_dispatch' ||
-      inputs.run_tests == true ||
-      inputs.smtp_validate_only != true
+      always() &&
+      needs.dispatch-audit.result == 'success' &&
+      (
+        github.event_name != 'workflow_dispatch' ||
+        inputs.run_tests == true
+      )
     env:
       SMTP_HOST: ${{ secrets.SMTP_HOST || vars.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT || vars.SMTP_PORT }}
@@ -373,7 +474,8 @@ jobs:
         with:
           name: qa-reports-${{ github.run_id }}
           path: |
-            reports/QA/**
+            reports/QA/**/*.pdf
+            reports/QA/**/*.xlsx
             reports/SCRUM-5-e2e/**
             test-results/**
             playwright-report/**
@@ -392,7 +494,7 @@ jobs:
     name: Workflow status gate
     runs-on: ubuntu-latest
     if: always()
-    needs: [validate-smtp, zephyr-report, playwright-e2e]
+    needs: [dispatch-audit, validate-smtp, zephyr-report, playwright-e2e]
     steps:
       - name: Summarize job outcomes
         run: |
@@ -401,11 +503,12 @@ jobs:
           echo "Branch/ref: ${{ github.ref }}"
           echo "SHA: ${{ github.sha }}"
           echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "dispatch-audit: ${{ needs.dispatch-audit.result }}"
           echo "validate-smtp: ${{ needs.validate-smtp.result }}"
           echo "zephyr-report: ${{ needs.zephyr-report.result }}"
           echo "playwright-e2e: ${{ needs.playwright-e2e.result }}"
           failed=0
-          for result in "${{ needs.validate-smtp.result }}" "${{ needs.zephyr-report.result }}" "${{ needs.playwright-e2e.result }}"; do
+          for result in "${{ needs.dispatch-audit.result }}" "${{ needs.validate-smtp.result }}" "${{ needs.zephyr-report.result }}" "${{ needs.playwright-e2e.result }}"; do
             if [ "$result" = "failure" ]; then
               failed=1
             fi

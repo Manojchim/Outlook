@@ -36,8 +36,13 @@ const {
 const {
   idempotencyKey,
   findSuccessfulSubmission,
+  findSubmissionForRun,
   appendDeliveryEntry
 } = require("../src/email/email-delivery-log.service");
+const {
+  asBool,
+  assertPreSendRequirements
+} = require("../src/email/email-send-guard.service");
 
 function parseArgs(argv) {
   const args = {
@@ -49,6 +54,7 @@ function parseArgs(argv) {
     validateSmtp: false,
     generateOnly: false,
     sendValidation: false,
+    confirmSend: asBool(process.env.CONFIRM_SEND_EMAIL),
     forceDeviceCode: false,
     forceResend: false
   };
@@ -58,6 +64,7 @@ function parseArgs(argv) {
     else if (a === "--validate-smtp") args.validateSmtp = true;
     else if (a === "--generate-only") args.generateOnly = true;
     else if (a === "--send-validation") args.sendValidation = true;
+    else if (a === "--confirm-send") args.confirmSend = true;
     else if (a === "--force-device-code") args.forceDeviceCode = true;
     else if (a === "--force-resend") args.forceResend = true;
     else if (a === "--story") args.story = argv[++i];
@@ -75,6 +82,7 @@ function printHelp() {
   --validate-smtp          Check SMTP env + connection/auth (does NOT send email)
   --auth-only              Run Microsoft device-code auth only (Outlook provider)
   --send-validation        Generate reports + send Phase 1 validation email
+  --confirm-send           Required with --send-validation (explicit dual confirmation)
   --source sample|zephyr   Report data source (default: sample / REPORT_DATA_SOURCE)
   --project SCRUM          Jira/Zephyr project key for live mode
   --cycle SCRUM-R1         Zephyr test cycle key/ID (required for --source zephyr)
@@ -247,10 +255,46 @@ async function main() {
   if (args.generateOnly || (!args.sendValidation && !config.autoSend)) {
     if (!args.sendValidation) {
       console.log(
-        "Email not sent (Phase 1: use --validate-smtp first, then --send-validation after confirmation; QA_REPORT_AUTO_SEND remains false until you confirm receipt)."
+        "Email not sent (Phase 1: use --validate-smtp first, then --send-validation --confirm-send after confirmation; QA_REPORT_AUTO_SEND remains false until you confirm receipt)."
       );
     }
     process.exit(0);
+  }
+
+  if (args.sendValidation && !args.confirmSend) {
+    const skipLogPath = path.join(generated.directory, "email-delivery.json");
+    appendDeliveryEntry(skipLogPath, {
+      idempotencyKey: idempotencyKey(
+        generated.data.storyKey,
+        generated.data.testCycleKey,
+        generated.data.executionDate,
+        process.env.GITHUB_RUN_ID || null
+      ),
+      executionId: generated.data.testCycleKey,
+      storyKey: generated.data.storyKey,
+      cycleKey: generated.data.testCycleKey,
+      executionDate: generated.data.executionDate,
+      recipient: null,
+      authenticationStatus: "NOT_ATTEMPTED",
+      submissionAccepted: false,
+      mailboxReceiptConfirmed: false,
+      emailStatus: "SKIPPED_CONFIRMATION_REQUIRED",
+      githubRunId: process.env.GITHUB_RUN_ID || null,
+      attachmentFilenames: [],
+      note: "--send-validation requires --confirm-send. No email was submitted."
+    });
+    console.error(
+      JSON.stringify({
+        executionStatus: "COMPLETED",
+        emailStatus: "SKIPPED_CONFIRMATION_REQUIRED",
+        submissionAccepted: false,
+        mailboxReceiptConfirmed: false,
+        deliveryLog: skipLogPath,
+        emailError:
+          "--send-validation requires --confirm-send (or CONFIRM_SEND_EMAIL=true). No email was submitted."
+      })
+    );
+    process.exit(1);
   }
 
   // Phase 1 validation send path
@@ -262,6 +306,7 @@ async function main() {
       JSON.stringify({
         executionStatus: "COMPLETED",
         emailStatus: "FAILED",
+        submissionAccepted: false,
         emailError: err.message,
         reportsPreserved: generated.files
       })
@@ -271,18 +316,40 @@ async function main() {
   }
 
   const logPath = path.join(generated.directory, "email-delivery.json");
+  const githubRunId = process.env.GITHUB_RUN_ID || null;
   const key = idempotencyKey(
     generated.data.storyKey,
     generated.data.testCycleKey,
-    generated.data.executionDate
+    generated.data.executionDate,
+    githubRunId
   );
-  if (!args.forceResend && findSuccessfulSubmission(logPath, key)) {
+  if (
+    !args.forceResend &&
+    (findSuccessfulSubmission(logPath, key) ||
+      findSubmissionForRun(logPath, githubRunId))
+  ) {
+    appendDeliveryEntry(logPath, {
+      idempotencyKey: key,
+      executionId: generated.data.testCycleKey,
+      storyKey: generated.data.storyKey,
+      cycleKey: generated.data.testCycleKey,
+      executionDate: generated.data.executionDate,
+      recipient,
+      authenticationStatus: "NOT_ATTEMPTED",
+      submissionAccepted: false,
+      mailboxReceiptConfirmed: false,
+      emailStatus: "SKIPPED_DUPLICATE",
+      githubRunId,
+      attachmentFilenames: [],
+      note: "Duplicate send blocked for this report version / Actions run. No email submitted."
+    });
     console.log(
       JSON.stringify({
         executionStatus: "COMPLETED",
         emailStatus: "SKIPPED_DUPLICATE",
+        submissionAccepted: false,
         idempotencyKey: key,
-        note: "A successful submission already exists for this report version."
+        note: "A successful submission already exists for this report version or Actions run."
       })
     );
     process.exit(0);
@@ -291,6 +358,25 @@ async function main() {
   const attachmentPaths = [generated.files.pdf, generated.files.xlsx].filter(
     Boolean
   );
+  const preSend = assertPreSendRequirements({
+    recipient,
+    attachmentPaths,
+    reportValidationOk: Boolean(generated.ok),
+    liveZephyrOk: args.source !== "zephyr" || Boolean(generated.data?.testCycleKey),
+    source: args.source
+  });
+  if (!preSend.ok) {
+    console.error(
+      JSON.stringify({
+        executionStatus: "COMPLETED",
+        emailStatus: "FAILED",
+        submissionAccepted: false,
+        emailError: preSend.errors.join(" "),
+        reportsPreserved: generated.files
+      })
+    );
+    process.exit(1);
+  }
 
   let providerResult;
   try {

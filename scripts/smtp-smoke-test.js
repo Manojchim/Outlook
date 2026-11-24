@@ -24,12 +24,20 @@ const {
   sendMailWithAttachmentsSmtp
 } = require("../src/email/smtp.service");
 
+const { asBool } = require("../src/email/email-send-guard.service");
+
 function parseArgs(argv) {
-  const args = { verifyOnly: false, sendTest: false, help: false };
+  const args = {
+    verifyOnly: false,
+    sendTest: false,
+    confirmSend: asBool(process.env.CONFIRM_SEND_EMAIL),
+    help: false
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--verify-only") args.verifyOnly = true;
     else if (a === "--send-test") args.sendTest = true;
+    else if (a === "--confirm-send") args.confirmSend = true;
     else if (a === "--help" || a === "-h") args.help = true;
   }
   if (!args.verifyOnly && !args.sendTest) args.verifyOnly = true;
@@ -40,6 +48,7 @@ function printHelp() {
   console.log(`Usage:
   --verify-only   Check SMTP config + connectivity/auth (default; no email)
   --send-test     After verify succeeds, send ONE smoke-test email
+  --confirm-send  Required with --send-test (explicit confirmation)
 `);
 }
 
@@ -90,13 +99,28 @@ async function main() {
         {
           step: "done",
           emailSent: false,
-          next: "Re-run with --send-test to send one smoke-test email."
+          submissionAccepted: false,
+          next: "Re-run with --send-test --confirm-send to send one smoke-test email."
         },
         null,
         2
       )
     );
     process.exit(0);
+  }
+
+  if (args.sendTest && !args.confirmSend) {
+    console.error(
+      JSON.stringify({
+        step: "smtp_send_test",
+        status: "SKIPPED_CONFIRMATION_REQUIRED",
+        emailSent: false,
+        submissionAccepted: false,
+        message:
+          "--send-test requires --confirm-send (or CONFIRM_SEND_EMAIL=true). No email was submitted."
+      })
+    );
+    process.exit(1);
   }
 
   let recipient;
