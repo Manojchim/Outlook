@@ -109,7 +109,7 @@
     .filter-btn { border: 1px solid #e8e9e2; color: #667269; background: #fff; padding: 8px 11px; border-radius: 30px; font-size: 10px; font-weight: 700; }
     .filter-btn.selected { background: var(--green); color: white; border-color: var(--green); }
     .clear-btn { margin-left: auto; border: 0; color: #8a938c; background: none; font-size: 10px; padding: 6px; }
-    .collection-meta { display: flex; justify-content: space-between; align-items: center; margin: 18px 1px 12px; font-size: 11px; color: var(--muted); }
+    .collection-meta { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 12px; font-size: 11px; color: var(--muted); }
     .collection-meta strong { color: var(--ink); }
     .shoe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     .shoe-card { background: var(--card); border: 1px solid var(--line); border-radius: 19px; padding: 10px; transition: transform .2s, box-shadow .2s; min-width: 0; }
@@ -175,7 +175,15 @@
       nav { gap: 17px; }
     }
     @media (max-width: 560px) {
-      header { height: 68px; } nav { display: none; }
+      /* Keep nav visible for mobile IA; layout wraps so brand+nav+account fit ≤375px. */
+      header {
+        height: auto;
+        min-height: 68px;
+        gap: 6px 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 8px 0;
+      }
       main { padding-top: 28px; }
       .intro-row { align-items: start; flex-direction: column; gap: 14px; }
       .planner { padding: 18px 15px; }
@@ -184,7 +192,8 @@
       .forecast-panel { padding: 15px; }
       .feature { min-height: 455px; padding: 24px; }
       .feature::before { inset: 30% 0 0 0; background: linear-gradient(180deg, var(--green) 1%, rgba(33,79,64,.2) 85%), var(--feature-photo, none) center / cover; }
-      .feature-copy { width: 100%; }
+      .feature-copy { width: 100%; min-width: 0; }
+      .feature-actions { flex-wrap: wrap; }
       .section-heading { margin-top: 34px; }
       .section-heading h2 { font-size: 21px; }
       .filters { gap: 7px; padding: 11px 9px; }
@@ -279,18 +288,35 @@
     .image-candidate-confirm { display: flex !important; align-items: start; gap: 6px; line-height: 1.4; }
     .image-candidate .btn { width: 100%; margin-top: 9px; padding: 8px; font-size: 9px; }
     @media (max-width: 560px) {
-      header { gap: 8px; }
-      nav { display: flex; gap: 9px; font-size: 10px; }
-      .brand { gap: 6px; font-size: 16px; }
-      .brand-mark { width: 28px; height: 28px; }
-      .top-right { gap: 4px; }
-      .welcome-label { font-size: 8px; }
-      .logout-button { padding: 7px 8px; font-size: 9px; }
+      .brand { gap: 6px; font-size: 16px; flex: 0 0 auto; min-width: 0; }
+      .brand-mark { width: 28px; height: 28px; flex: 0 0 auto; }
+      nav {
+        display: flex;
+        flex: 1 1 100%;
+        order: 3;
+        gap: 12px;
+        font-size: 10px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .top-right {
+        gap: 4px;
+        flex: 1 1 auto;
+        justify-content: flex-end;
+        min-width: 0;
+      }
+      .welcome-label {
+        font-size: 8px;
+        max-width: 12ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .logout-button { padding: 7px 8px; font-size: 9px; flex: 0 0 auto; }
       .login-card { padding: 25px 20px; }
       .running-options { grid-template-columns: 1fr; gap: 14px; }
       .colour-option { padding: 6px 7px; font-size: 8px; }
       .collection-toolbar { grid-template-columns: 1fr; gap: 9px; }
-      .collection-tabs { width: max-content; }
+      .collection-tabs { width: auto; max-width: 100%; flex-wrap: wrap; }
       .collection-search-label { margin-top: 3px; }
       .brand-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .brand-card { gap: 7px; padding: 9px 7px; }
@@ -300,7 +326,10 @@
       .collection-meta { align-items: start; gap: 9px; flex-direction: column; }
       .image-admin-panel { padding: 16px 12px; }
       .image-admin-controls { grid-template-columns: 1fr; gap: 7px; }
+      .image-admin-providers { grid-template-columns: minmax(0, 1fr); }
+      .image-admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .image-admin-shoe { grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
       .image-admin-shoe-status { grid-column: 1 / -1; }
+      .image-admin-candidate-list { grid-template-columns: minmax(0, 1fr); }
     }
   
