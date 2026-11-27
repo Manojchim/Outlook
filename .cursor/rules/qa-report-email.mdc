@@ -22,17 +22,21 @@ After a Jira User Story QA execution is complete (Zephyr updates, Bugs for confi
 
 1. Default CI provider: **SMTP** via GitHub Secrets (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) and Variable `TEST_EMAIL_RECIPIENT`.
 2. Encryption: port `465` → TLS/SSL; port `587` → STARTTLS. Optional `SMTP_SECURE` override.
-3. Phase 1 recipient: only `TEST_EMAIL_RECIPIENT` (`rmanoj@chimeratechnologies.com`).
+3. Recipient allowlist: only `rmanoj@chimeratechnologies.com` (no CC/BCC).
 4. Before the first send: run `npm run qa:report:validate-smtp` (connection + auth only; **no email sent**).
-5. Do **not** auto-send until the user has confirmed the Phase 1 validation email (and both attachments) were received. Keep `QA_REPORT_AUTO_SEND=false` until then.
-6. For Phase 1 send (only after user confirmation): `npm run qa:report:send-validation` with PDF + Excel attached.
-7. Prevent duplicate submissions using delivery-log idempotency `{storyKey}:{cycleKey}:{reportDate}`.
-8. Preserve generated reports on email failure for retry (disk + CI artifacts).
+5. Explicit validation: `npm run qa:report:send-validation` (never from smoke-only modes).
+6. Controlled auto-send: `node scripts/qa-report-send.js --send-auto` only when `QA_REPORT_AUTO_SEND=true` **and** `qa-report-auto-send-policy.service.js` allows (push `main` or dispatch `run_tests`, successful Playwright + reports, not PR/fork/smoke/validation).
+7. Workflow must honor `vars.QA_REPORT_AUTO_SEND` on the Playwright job — do not hardcode `false` there. Smoke/validation jobs keep `QA_REPORT_AUTO_SEND=false`.
+8. Prevent duplicate submissions using delivery-log idempotency `{storyKey}:{cycleKey}:{reportDate}:gha-{runId}` for auto-send.
+9. Preserve generated reports on email failure for retry (disk + CI artifacts).
+10. Do not claim automatic reporting works until a genuine eligible QA run demonstrates delivery.
+11. Local Stride worker email is a separate configuration task and cannot access GitHub Secrets.
 
-## Phase 2 (only after user confirmation)
+## Phase 2 (production auto-send)
 
-When the user confirms validation receipt and enables auto-send:
+When `vars.QA_REPORT_AUTO_SEND=true` on Manojchim/Outlook:
 
-1. After each completed User Story, generate PDF + Excel automatically.
-2. If `QA_REPORT_AUTO_SEND=true` and recipients are configured, send both attachments.
+1. After a successful Playwright e2e run on `main` (or dispatch with `run_tests=true`), generate PDF + Excel then invoke `--send-auto`.
+2. Attachments only when files exist and pass validation — never fabricate evidence.
 3. Record delivery log; preserve reports on email failure for retry.
+4. Do not send for failed/cancelled/incomplete runs unless a separately approved failure-notification policy exists (none today).

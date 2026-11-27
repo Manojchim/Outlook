@@ -2,7 +2,9 @@ name: QA Automation
 
 # Actions target: Manojchim/Outlook only (main).
 # Maps SMTP / Zephyr credentials from GitHub Secrets and Variables.
-# Automatic email delivery stays DISABLED (QA_REPORT_AUTO_SEND=false).
+# Production auto-send honors vars.QA_REPORT_AUTO_SEND (default false if unset).
+# Auto-send runs only after successful Playwright + report generation on
+# push to main or workflow_dispatch with run_tests=true (never PR/fork/smoke/validation).
 # Live Zephyr create/execute/send requires explicit workflow_dispatch inputs + operator approval.
 on:
   workflow_dispatch:
@@ -56,7 +58,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QA_REPORT_AUTO_SEND: "false"
+  # Honor repository variable; default false when unset. Smoke/validation jobs override to false.
+  QA_REPORT_AUTO_SEND: ${{ vars.QA_REPORT_AUTO_SEND || 'false' }}
   QA_EMAIL_PROVIDER: smtp
   QA_REPORT_FORMATS: pdf,xlsx
   AUT_BASE_URL: "http://127.0.0.1:4173"
@@ -314,7 +317,7 @@ jobs:
       SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL || vars.SMTP_FROM_EMAIL }}
       TEST_EMAIL_RECIPIENT: ${{ vars.TEST_EMAIL_RECIPIENT }}
       QA_EMAIL_PROVIDER: smtp
-      QA_REPORT_AUTO_SEND: "false"
+      # Inherit workflow env (vars.QA_REPORT_AUTO_SEND); do not hardcode false here.
       REPORT_DATA_SOURCE: sample
       HOST: "127.0.0.1"
       PORT: "4173"
@@ -367,6 +370,46 @@ jobs:
         run: node scripts/qa-report-send.js --generate-only --source sample --story SCRUM-5
         continue-on-error: true
 
+      - name: Controlled automatic QA report email
+        id: auto_email
+        if: >
+          always() &&
+          github.repository == 'Manojchim/Outlook' &&
+          github.event_name != 'pull_request' &&
+          steps.tests.outcome == 'success' &&
+          steps.reports.outcome == 'success' &&
+          (
+            (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+            (github.event_name == 'workflow_dispatch' &&
+             inputs.run_tests == true &&
+             inputs.smtp_validate_only != true &&
+             inputs.send_test_email != true &&
+             inputs.send_validation_email != true &&
+             inputs.send_email != true)
+          )
+        env:
+          QA_REPORT_AUTO_SEND: ${{ vars.QA_REPORT_AUTO_SEND || 'false' }}
+          QA_PLAYWRIGHT_OUTCOME: ${{ steps.tests.outcome }}
+          QA_REPORTS_OUTCOME: ${{ steps.reports.outcome }}
+          GITHUB_EVENT_REPOSITORY_FORK: ${{ github.event.repository.fork }}
+          INPUT_RUN_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests || false }}
+          INPUT_SMTP_VALIDATE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.smtp_validate_only || false }}
+          INPUT_SEND_TEST_EMAIL: ${{ github.event_name == 'workflow_dispatch' && inputs.send_test_email || false }}
+          INPUT_SEND_VALIDATION_EMAIL: ${{ github.event_name == 'workflow_dispatch' && inputs.send_validation_email || false }}
+          INPUT_SEND_EMAIL: ${{ github.event_name == 'workflow_dispatch' && inputs.send_email || false }}
+        run: |
+          set -euo pipefail
+          echo "QA_REPORT_AUTO_SEND=${QA_REPORT_AUTO_SEND}"
+          echo "Event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF}"
+          if [ "${QA_REPORT_AUTO_SEND}" != "true" ]; then
+            echo "Auto-send skipped: repository variable QA_REPORT_AUTO_SEND is not true."
+            echo "QA_EMAIL_STATUS=skipped_auto_send_disabled" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # Policy + allowlist + idempotency enforced inside CLI (mocked in unit tests only).
+          node scripts/qa-report-send.js --send-auto --source sample --story SCRUM-5
+          echo "QA_EMAIL_STATUS=auto_send_attempted" >> "$GITHUB_ENV"
+
       - name: Upload QA reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -384,7 +427,7 @@ jobs:
         if: always()
         env:
           QA_REPORT_STATUS: ${{ steps.reports.outcome || 'n/a' }}
-          QA_EMAIL_STATUS: not attempted
+          QA_EMAIL_STATUS: ${{ env.QA_EMAIL_STATUS || 'not attempted' }}
           REPORT_DATA_SOURCE: sample
         run: node scripts/write-qa-job-summary.js
 
