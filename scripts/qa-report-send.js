@@ -8,9 +8,11 @@
  *   node --env-file-if-exists=.env scripts/qa-report-send.js --validate-smtp
  *   node --env-file-if-exists=.env scripts/qa-report-send.js --auth-only
  *   node --env-file-if-exists=.env scripts/qa-report-send.js --send-validation --story SCRUM-5
+ *   node --env-file-if-exists=.env scripts/qa-report-send.js --send-auto --story SCRUM-5
  *
- * Auto-send remains disabled until QA_REPORT_AUTO_SEND=true AND Phase 1 receipt is confirmed.
- * Prefer --validate-smtp before any first send. Never log passwords or tokens.
+ * --send-auto requires QA_REPORT_AUTO_SEND=true plus Actions context env gates
+ * (see qa-report-auto-send-policy.service.js). Prefer --validate-smtp before first send.
+ * Never log passwords or tokens.
  */
 
 const path = require("node:path");
@@ -38,6 +40,15 @@ const {
   findSuccessfulSubmission,
   appendDeliveryEntry
 } = require("../src/email/email-delivery-log.service");
+const {
+  evaluateQaReportAutoSendPolicy,
+  buildAutoSendIdempotencyKey,
+  buildAutoReportSubject,
+  buildAutoReportBody
+} = require("../src/email/qa-report-auto-send-policy.service");
+const {
+  validateReportFiles
+} = require("../src/reporting/report-validation.service");
 
 function parseArgs(argv) {
   const args = {
@@ -49,6 +60,7 @@ function parseArgs(argv) {
     validateSmtp: false,
     generateOnly: false,
     sendValidation: false,
+    sendAuto: false,
     forceDeviceCode: false,
     forceResend: false
   };
@@ -58,6 +70,7 @@ function parseArgs(argv) {
     else if (a === "--validate-smtp") args.validateSmtp = true;
     else if (a === "--generate-only") args.generateOnly = true;
     else if (a === "--send-validation") args.sendValidation = true;
+    else if (a === "--send-auto") args.sendAuto = true;
     else if (a === "--force-device-code") args.forceDeviceCode = true;
     else if (a === "--force-resend") args.forceResend = true;
     else if (a === "--story") args.story = argv[++i];
@@ -75,6 +88,7 @@ function printHelp() {
   --validate-smtp          Check SMTP env + connection/auth (does NOT send email)
   --auth-only              Run Microsoft device-code auth only (Outlook provider)
   --send-validation        Generate reports + send Phase 1 validation email
+  --send-auto              Controlled production auto-send (requires policy + QA_REPORT_AUTO_SEND)
   --source sample|zephyr   Report data source (default: sample / REPORT_DATA_SOURCE)
   --project SCRUM          Jira/Zephyr project key for live mode
   --cycle SCRUM-R1         Zephyr test cycle key/ID (required for --source zephyr)
@@ -124,15 +138,20 @@ async function sendViaProvider({
   config,
   recipient,
   generated,
-  attachmentPaths
+  attachmentPaths,
+  subject,
+  bodyText
 }) {
+  const resolvedSubject =
+    subject || buildValidationSubject(generated.data);
+  const resolvedBody = bodyText || buildValidationBody(generated.data);
   if (config.provider === "smtp") {
     const sendResult = await sendMailWithAttachmentsSmtp({
       config,
       to: recipient,
       cc: [],
-      subject: buildValidationSubject(generated.data),
-      bodyText: buildValidationBody(generated.data),
+      subject: resolvedSubject,
+      bodyText: resolvedBody,
       attachmentPaths
     });
     return {
@@ -147,8 +166,8 @@ async function sendViaProvider({
     accessToken: auth.accessToken,
     to: recipient,
     cc: [],
-    subject: buildValidationSubject(generated.data),
-    bodyText: buildValidationBody(generated.data),
+    subject: resolvedSubject,
+    bodyText: resolvedBody,
     attachmentPaths
   });
   return {
@@ -156,6 +175,32 @@ async function sendViaProvider({
     authenticationStatus: "SUCCESS",
     sendResult
   };
+}
+
+function assessAutoSendFromEnv(config) {
+  return evaluateQaReportAutoSendPolicy({
+    autoSend: config.autoSend,
+    eventName: process.env.GITHUB_EVENT_NAME || "",
+    ref: process.env.GITHUB_REF || "",
+    repository: process.env.GITHUB_REPOSITORY || "",
+    isFork: String(process.env.GITHUB_EVENT_REPOSITORY_FORK || "false"),
+    runTests: process.env.INPUT_RUN_TESTS || process.env.QA_RUN_TESTS || "false",
+    smtpValidateOnly:
+      process.env.INPUT_SMTP_VALIDATE_ONLY ||
+      process.env.QA_SMTP_VALIDATE_ONLY ||
+      "false",
+    sendTestEmail:
+      process.env.INPUT_SEND_TEST_EMAIL || process.env.QA_SEND_TEST_EMAIL || "false",
+    sendValidationEmail:
+      process.env.INPUT_SEND_VALIDATION_EMAIL ||
+      process.env.QA_SEND_VALIDATION_EMAIL ||
+      "false",
+    sendEmail: process.env.INPUT_SEND_EMAIL || process.env.QA_SEND_EMAIL || "false",
+    playwrightOutcome: process.env.QA_PLAYWRIGHT_OUTCOME || "",
+    reportsOutcome: process.env.QA_REPORTS_OUTCOME || "",
+    recipient: config.testRecipient || config.recipients[0] || "",
+    githubRunId: process.env.GITHUB_RUN_ID || null
+  });
 }
 
 async function main() {
@@ -243,17 +288,46 @@ async function main() {
     )
   );
 
-  // Default path: generate only. Auto-send stays off until explicitly enabled + confirmed.
-  if (args.generateOnly || (!args.sendValidation && !config.autoSend)) {
-    if (!args.sendValidation) {
-      console.log(
-        "Email not sent (Phase 1: use --validate-smtp first, then --send-validation after confirmation; QA_REPORT_AUTO_SEND remains false until you confirm receipt)."
-      );
-    }
+  // Default path: generate only. Explicit --send-validation or --send-auto required to email.
+  if (args.generateOnly || (!args.sendValidation && !args.sendAuto)) {
+    console.log(
+      "Email not sent (use --validate-smtp, --send-validation, or gated --send-auto). Reports preserved on disk."
+    );
     process.exit(0);
   }
 
-  // Phase 1 validation send path
+  const fileCheck = validateReportFiles(generated.files || {});
+  if (!fileCheck.ok) {
+    console.error(
+      JSON.stringify({
+        executionStatus: "COMPLETED",
+        emailStatus: "NOT_ATTEMPTED",
+        emailError: "Report files failed validation; refusing to send.",
+        errors: fileCheck.errors,
+        reportsPreserved: generated.files
+      })
+    );
+    process.exit(1);
+  }
+
+  const isAuto = Boolean(args.sendAuto);
+  if (isAuto) {
+    const policy = assessAutoSendFromEnv(config);
+    if (!policy.allowed) {
+      console.log(
+        JSON.stringify({
+          executionStatus: "COMPLETED",
+          emailStatus: "SKIPPED_POLICY",
+          blockers: policy.blockers,
+          trigger: policy.trigger,
+          note: policy.note,
+          reportsPreserved: generated.files
+        })
+      );
+      process.exit(0);
+    }
+  }
+
   let recipient;
   try {
     recipient = assertValidationRecipient(config);
@@ -271,18 +345,25 @@ async function main() {
   }
 
   const logPath = path.join(generated.directory, "email-delivery.json");
-  const key = idempotencyKey(
-    generated.data.storyKey,
-    generated.data.testCycleKey,
-    generated.data.executionDate
-  );
+  const key = isAuto
+    ? buildAutoSendIdempotencyKey({
+        storyKey: generated.data.storyKey,
+        cycleKey: generated.data.testCycleKey,
+        executionDate: generated.data.executionDate,
+        githubRunId: process.env.GITHUB_RUN_ID || null
+      })
+    : idempotencyKey(
+        generated.data.storyKey,
+        generated.data.testCycleKey,
+        generated.data.executionDate
+      );
   if (!args.forceResend && findSuccessfulSubmission(logPath, key)) {
     console.log(
       JSON.stringify({
         executionStatus: "COMPLETED",
         emailStatus: "SKIPPED_DUPLICATE",
         idempotencyKey: key,
-        note: "A successful submission already exists for this report version."
+        note: "A successful submission already exists for this report version / workflow run."
       })
     );
     process.exit(0);
@@ -291,6 +372,29 @@ async function main() {
   const attachmentPaths = [generated.files.pdf, generated.files.xlsx].filter(
     Boolean
   );
+
+  const subject = isAuto
+    ? buildAutoReportSubject({
+        storyKey: generated.data.storyKey,
+        overallStatus: generated.data.overallStatus || generated.data.recommendation,
+        branch: process.env.GITHUB_REF || process.env.GITHUB_REF_NAME || "",
+        sha: process.env.GITHUB_SHA || "",
+        repository: process.env.GITHUB_REPOSITORY || "Manojchim/Outlook"
+      })
+    : undefined;
+  const bodyText = isAuto
+    ? buildAutoReportBody({
+        storyKey: generated.data.storyKey,
+        overallStatus: generated.data.overallStatus || generated.data.recommendation,
+        branch: process.env.GITHUB_REF || process.env.GITHUB_REF_NAME || "",
+        sha: process.env.GITHUB_SHA || "",
+        repository: process.env.GITHUB_REPOSITORY || "Manojchim/Outlook",
+        runUrl: process.env.GITHUB_SERVER_URL
+          ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+          : null,
+        metrics: generated.data.metrics
+      })
+    : undefined;
 
   let providerResult;
   try {
@@ -306,7 +410,9 @@ async function main() {
       config,
       recipient,
       generated,
-      attachmentPaths
+      attachmentPaths,
+      subject,
+      bodyText
     });
   } catch (err) {
     appendDeliveryEntry(logPath, {
@@ -343,6 +449,9 @@ async function main() {
   }
 
   const sendResult = providerResult.sendResult;
+  const awaitingNote = isAuto
+    ? "Automatic production send submitted. SMTP acceptance is not independent mailbox receipt."
+    : "Please confirm the email and both attachments arrived.";
   const entry = appendDeliveryEntry(logPath, {
     idempotencyKey: key,
     executionId: generated.data.dummyCycleKey || generated.data.testCycleKey,
@@ -355,14 +464,16 @@ async function main() {
     submissionAccepted: sendResult.submissionAccepted,
     mailboxReceiptConfirmed: false,
     emailStatus: sendResult.submissionAccepted
-      ? "SUBMITTED_AWAITING_RECEIPT_CONFIRMATION"
+      ? isAuto
+        ? "SUBMITTED_AUTO"
+        : "SUBMITTED_AWAITING_RECEIPT_CONFIRMATION"
       : "FAILED",
     httpStatus: sendResult.httpStatus || null,
     messageId: sendResult.messageId || null,
     graphErrorCode: sendResult.graphError?.error?.code || null,
     graphErrorMessage: sendResult.graphError?.error?.message || null,
     attachmentFilenames: sendResult.attachmentNames,
-    note: sendResult.note
+    note: sendResult.note || awaitingNote
   });
 
   console.log(
@@ -370,6 +481,7 @@ async function main() {
       {
         executionStatus: "COMPLETED",
         emailStatus: entry.emailStatus,
+        mode: isAuto ? "auto" : "validation",
         provider: providerResult.provider,
         submissionAccepted: entry.submissionAccepted,
         mailboxReceiptConfirmed: false,
@@ -377,9 +489,9 @@ async function main() {
         messageId: entry.messageId || null,
         recipient: entry.recipient,
         attachments: entry.attachmentFilenames,
+        idempotencyKey: key,
         deliveryLog: logPath,
-        pleaseConfirm:
-          "Please confirm the email and both attachments arrived. Auto-send stays disabled until then."
+        pleaseConfirm: awaitingNote
       },
       null,
       2

@@ -9,7 +9,7 @@ Read-only Zephyr Scale Cloud retrieval for QA PDF/Excel reporting, with explicit
 
 Live mode **never** falls back to sample data.
 
-`QA_REPORT_AUTO_SEND=false` remains the default. Email send is not part of the live report job.
+Live Zephyr report job keeps `QA_REPORT_AUTO_SEND=false` (explicit `send_email` only). Production auto-send is limited to the Playwright job after successful e2e + report generation when `vars.QA_REPORT_AUTO_SEND=true`.
 
 ## Required configuration
 
